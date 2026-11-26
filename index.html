@@ -21,6 +21,7 @@
   --accent:#4cc3ff;--accentInk:#04121c;--violet:#b597ff;
   --ok:#34d27b;--watch:#f2c94c;--easy:#ff9f43;--rest:#ff5c6c;--none:#4a5468;--info:#7fa8d9;
   --viz-bar:#245b8a;--viz-bar-hi:#3a7fb8;--viz-line:#4cc3ff;--viz-vo2:#b597ff;--viz-trend:#8e98ab;--viz-grid:#1f2737;--viz-rug:#4a5468;
+  --viz-eff:#f472b6;--viz-eff-bar:#7a2f5c;--viz-eff-hi:#a3457c;--viz-band:rgba(238,242,248,.07);--viz-band-edge:rgba(238,242,248,.18);
   --display:"Barlow Condensed","Roboto Condensed","Arial Narrow",system-ui,sans-serif;
   --text:"Barlow",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   --tabH:68px;
@@ -139,6 +140,23 @@ h2{font-family:var(--display);font-size:20px;font-weight:600;margin:0;letter-spa
 .k-bar{width:10px;height:10px;border-radius:2px;background:var(--viz-bar)}
 .k-line{width:16px;height:2px;border-radius:1px;background:var(--viz-line)}
 .k-trend{width:16px;border-top:1.5px dashed var(--viz-trend)}
+.k-ebar{width:10px;height:10px;border-radius:2px;background:var(--viz-eff-bar)}
+.k-eline{width:16px;height:2px;border-radius:1px;background:var(--viz-eff)}
+.k-band{width:14px;height:10px;border-radius:2px;background:var(--viz-band);box-shadow:inset 0 0 0 1px var(--viz-band-edge)}
+.k-last{width:16px;border-top:1.5px dashed var(--viz-trend)}
+.ebar{fill:var(--viz-eff-bar)}
+.ebar.partial{opacity:.55}
+.ebar.on{fill:var(--viz-eff-hi);opacity:1}
+.eln{fill:none;stroke:var(--viz-eff);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.edot{fill:var(--viz-eff);stroke:var(--surface);stroke-width:2}
+.band{fill:var(--viz-band);stroke:var(--viz-band-edge);stroke-width:1}
+.lastwk{fill:none;stroke:var(--viz-trend);stroke-width:1.5;stroke-dasharray:4 4}
+.ax.today{fill:var(--ink);font-weight:700}
+.effnow{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;font-size:12px;font-weight:700;padding:5px 10px;border-radius:999px;color:var(--sc,var(--muted));background:color-mix(in srgb, var(--sc,var(--none)) 16%, transparent)}
+.chip.ok,.st.ok{--sc:var(--ok)}.chip.watch,.st.watch{--sc:var(--watch)}.chip.rest,.st.rest{--sc:var(--rest)}.chip.info,.st.info{--sc:var(--info)}.chip.none{--sc:var(--none)}
+.st{font-weight:700;color:var(--sc,var(--muted))}
+.subhead{font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin:18px 0 0;padding-top:14px;border-top:1px solid var(--line)}
 .seg2{display:inline-flex;flex:none;background:var(--surface2);border:1px solid var(--line);border-radius:999px;padding:3px}
 .seg2 button{border:0;background:none;color:var(--muted);font-size:12px;font-weight:700;padding:6px 11px;border-radius:999px;cursor:pointer}
 .seg2 button[aria-pressed="true"]{background:var(--violet);color:#160c2a}
@@ -222,7 +240,7 @@ input:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px}
   <div id="viewTrends" hidden>
     <section class="card" id="trendsConnect" hidden>
       <h2>Your trends</h2>
-      <p class="empty" style="margin-top:8px">Connect Intervals.icu to see your 12-week running mileage and your VO2max trend.</p>
+      <p class="empty" style="margin-top:8px">Connect Intervals.icu to see your 12-week running mileage, your weekly effort and your VO2max trend.</p>
       <button class="btn" id="connectBtn2">Connect Intervals.icu</button>
     </section>
 
@@ -245,6 +263,42 @@ input:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px}
             <tbody id="mTable"></tbody>
           </table></div>
         </details>
+      </section>
+
+      <section class="card" id="effCard">
+        <div class="cardhead"><div><h2>Weekly effort</h2><p class="sub">Heart-rate effort score from Intervals.icu (TRIMP) · all training</p></div></div>
+        <p class="empty" id="effCover" hidden></p>
+        <div class="effnow">
+          <div><div class="sl">This week so far</div><div class="big"><span class="bv" id="effNow">—</span></div></div>
+          <span class="chip" id="effChip"></span>
+        </div>
+        <div class="bd" id="effRange"></div>
+        <div class="readout" id="ewRead" aria-live="polite"></div>
+        <svg class="chart" id="effWeek" height="160" tabindex="0" role="img" aria-label="This week's effort adding up day by day, against your range and last week. Use the left and right arrow keys to move through the days."></svg>
+        <div class="legend">
+          <span><i class="k-eline"></i>This week, adding up</span>
+          <span><i class="k-last"></i>Last week</span>
+          <span><i class="k-band"></i>Your range</span>
+        </div>
+
+        <div class="subhead">Last 12 weeks</div>
+        <div class="stats" id="eStats" style="margin-top:10px"></div>
+        <div class="readout" id="eRead" aria-live="polite"></div>
+        <svg class="chart" id="effChart" height="210" tabindex="0" role="img" aria-label="Weekly effort for 12 weeks with each week's range, the rolling 7-day total and a trend line. Use the left and right arrow keys to move through the days."></svg>
+        <div class="legend">
+          <span><i class="k-ebar"></i>Week total, faded while in progress</span>
+          <span><i class="k-band"></i>That week's range</span>
+          <span><i class="k-eline"></i>Rolling 7 days</span>
+          <span><i class="k-trend"></i>12-week trend</span>
+        </div>
+        <details class="tbl">
+          <summary>Week by week</summary>
+          <div class="tablewrap"><table>
+            <thead><tr><th>Week</th><th>Effort</th><th>Range</th><th>Hours</th><th>Status</th></tr></thead>
+            <tbody id="eTable"></tbody>
+          </table></div>
+        </details>
+        <p class="hint" style="margin-top:10px" id="effNote"></p>
       </section>
 
       <section class="card" id="vo2Card">
@@ -317,9 +371,12 @@ input:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px}
     <section class="card">
       <h2>Trends</h2>
       <div class="grid2">
-        <div class="field"><label for="r_steadyPct">Mileage counts as steady within ± %</label><input id="r_steadyPct" type="number" inputmode="numeric"></div>
+        <div class="field"><label for="r_steadyPct">Trend counts as steady within ± %</label><input id="r_steadyPct" type="number" inputmode="numeric"></div>
+        <div class="field"><label for="r_effLo">Effort range: low, % of 3-week average</label><input id="r_effLo" type="number" inputmode="numeric"></div>
+        <div class="field"><label for="r_effHi">Effort range: high, %</label><input id="r_effHi" type="number" inputmode="numeric"></div>
+        <div class="field"><label for="r_effWarn">Effort: well above at %</label><input id="r_effWarn" type="number" inputmode="numeric"></div>
       </div>
-      <p class="note">The 12-week trend line is fitted to your rolling 7-day total. If it changes by less than this share of your average week, the trend shows as steady.</p>
+      <p class="note">The 12-week trend line is fitted to your rolling 7-day total. If it changes by less than this share of your average week, the trend shows as steady. The same applies to the effort trend. Your weekly effort range comes from your average over the previous 3 full weeks. These are your own heuristics, not medical limits.</p>
     </section>
 
     <section class="card">
@@ -339,9 +396,9 @@ input:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px}
    Trends: 12-week running mileage and the Garmin VO2max estimate.
    Data: Intervals.icu API v1 (Garmin → Intervals.icu). Nothing leaves the phone except the requests to intervals.icu. */
 const DEMO = null;
-const VERSION = "1.2";
+const VERSION = "1.3";
 
-const DEF_RULES = {rhrEasy:48, rhrRest:50, sleepEasy:75, sleepTarget:80, formEasy:-20, formWatch:-10, hardMin:12, hardZone:3, load3:200, hrrLow:40, steadyPct:10};
+const DEF_RULES = {rhrEasy:48, rhrRest:50, sleepEasy:75, sleepTarget:80, formEasy:-20, formWatch:-10, hardMin:12, hardZone:3, load3:200, hrrLow:40, steadyPct:10, effLo:80, effHi:130, effWarn:150};
 const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 const DAYS_LONG = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
 const DEF_PLAN = [
@@ -355,7 +412,7 @@ const DEF_PLAN = [
 ];
 const MON = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const MON3 = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-const LONG_DAYS = 100, SHORT_DAYS = 16;   // how far back to load: everything once a day, the last 16 days on other refreshes
+const LONG_DAYS = 112, SHORT_DAYS = 16;   // how far back to load: everything once a day, the last 16 days on other refreshes
 const ICONS = {
   heart:'<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>',
   moon:'<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',
@@ -376,7 +433,7 @@ let R = Object.assign({}, DEF_RULES, store.get("rules", {}));
 let PLAN = store.get("plan", null) || DEF_PLAN.map(p=>({...p}));
 let data = null, mode = "none", lastError = "";
 let view = "today", vo2N = store.get("vo2N", 28) === 84 ? 84 : 28;
-let mSel = null, vSel = null, TR = null, daySel = null;   // chart selections, last trends model, selected day in the strip
+let mSel = null, vSel = null, eSel = null, wSel = null, TR = null, daySel = null;   // chart selections, last trends model, selected day in the strip
 
 /* ---------- dates ---------- */
 const $ = id => document.getElementById(id);
@@ -414,7 +471,7 @@ function indexData(){
     let z = a.icu_hr_zone_times; z = Array.isArray(z) ? z : (z && Array.isArray(z.zones) ? z.zones : null);
     let h = a.icu_hrr; h = num(h) ? h : (h && num(h.hrr) ? h.hrr : (h && num(h.start_bpm) && num(h.end_bpm) ? h.start_bpm-h.end_bpm : null));
     (A[d] = A[d]||[]).push({type:a.type, dist:num(a.distance)?a.distance:0, mov:a.moving_time||0, load:num(a.icu_training_load)?a.icu_training_load:0,
-                            inten:num(a.icu_intensity)?a.icu_intensity:null, z, hrr:h});
+                            inten:num(a.icu_intensity)?a.icu_intensity:null, z, hrr:h, trimp:num(a.trimp)?a.trimp:null});
   });
 }
 const dayLoad = d => (A[d]||[]).reduce((s,a)=>s+a.load,0);
@@ -714,12 +771,141 @@ function drawVo2(V){
     + (num(p.v) ? `<b>${fmtV(p.v)}</b> ml/kg/min · ${p.r ? "Garmin reading that day" : since ? "no reading that day, holding since "+dm(since) : "carried from before this period"}` : "No value yet");
 }
 
+/* ---------- Trends: weekly effort (Intervals.icu TRIMP) ---------- */
+const effOn = d => (A[d]||[]).reduce((s,a)=>s+(num(a.trimp)?a.trimp:0),0);
+const secOn = d => (A[d]||[]).reduce((s,a)=>s+(num(a.trimp)?a.mov:0),0);   // training time that carries an effort score
+const sportName = t => t==="WeightTraining" ? "Strength" : String(t).replace(/([a-z])([A-Z])/g,"$1 $2");
+function effStatus(e, r, partial){
+  if(!r) return {k:"none", t:"No range yet"};
+  if(e>r.warn) return {k:"rest", t:"Well above range"};
+  if(e>r.hi) return {k:"watch", t:"Above range"};
+  if(e>=r.lo) return {k:"ok", t:"In range"};
+  return {k:"info", t: partial ? "Below range so far" : "Below range"};
+}
+function effortModel(today){
+  const curMon = add(today,-dowMon0(today)), first = add(curMon,-77), n = daysBetween(first,today)+1, base = add(first,-21);
+  const daily = Array.from({length:n+21},(_,i)=>effOn(add(base,i)));   // daily[i+21] is day first+i
+  const secs  = Array.from({length:n+21},(_,i)=>secOn(add(base,i)));
+  const roll = Array.from({length:n},(_,i)=>{ let s=0; for(let j=0;j<7;j++) s+=daily[i+21-j]; return s; });
+  const wk = k => { let e=0, t=0; for(let j=0;j<7;j++){ const i=7*k+j; if(i>=n) break; e+=daily[i+21]; t+=secs[i+21]; } return {e,t}; };
+  const weeks = Array.from({length:12},(_,k)=>{
+    const {e,t} = wk(k), avg = (wk(k-1).e + wk(k-2).e + wk(k-3).e)/3, start = add(first,7*k), partial = 7*k+6>=n;
+    const range = avg>0 ? {avg, lo:avg*R.effLo/100, hi:avg*R.effHi/100, warn:avg*R.effWarn/100} : null;
+    return {k, start, end:add(start,6), e, hours:t/3600, range, partial, status:effStatus(e, range, partial)};
+  });
+  let fit = null;                                                        // least-squares line through the rolling 7-day effort
+  if(n>=14){
+    const mx=(n-1)/2, my=roll.reduce((s,v)=>s+v,0)/n; let sxx=0, sxy=0;
+    roll.forEach((v,i)=>{ sxx+=(i-mx)*(i-mx); sxy+=(i-mx)*(v-my); });
+    const b=sxy/sxx, a=my-b*mx, s=a, e=a+b*(n-1), pct = my>0 ? (e-s)/my*100 : 0;
+    fit = {s, e, pct, label: my<=0 ? "none" : pct>=R.steadyPct ? "Rising" : pct<=-R.steadyPct ? "Falling" : "Steady"};
+  }
+  let e7=0, t7=0; for(let j=0;j<7;j++){ e7+=daily[n-1+21-j]; t7+=secs[n-1+21-j]; }
+  let eA=0, tA=0; weeks.slice(0,11).forEach(w=>{ eA+=w.e; tA+=w.hours*3600; });
+  const todayIdx = dowMon0(today), cum = [], last = [];                  // this week day by day, and last week for comparison
+  let c = 0; for(let j=0;j<=todayIdx;j++){ c += daily[77+j+21]; cum.push(c); }
+  c = 0; for(let j=0;j<7;j++){ c += daily[70+j+21]; last.push(c); }
+  let noHR = 0;
+  for(let i=-21;i<n;i++) (A[add(first,i)]||[]).forEach(a=>{ if(!num(a.trimp) && a.mov>=600 && !/transition/i.test(a.type)) noHR++; });
+  return {first, base, n, daily, roll, weeks, fit, avgFull:eA/11, last7:roll[n-1], perHr7: t7>0 ? e7/(t7/3600) : null, perHrAvg: tA>0 ? eA/(tA/3600) : null,
+          cur:weeks[11], curMon, todayIdx, cum, last, noHR};
+}
+function gridY(L, pw, yMax, step, y){
+  let s = "";
+  for(let v=0; v<=yMax+1e-9; v+=step){ const yy = y(v).toFixed(1);
+    s += `<line class="gl" x1="${L}" x2="${L+pw}" y1="${yy}" y2="${yy}"/><text class="ax" x="${L-6}" y="${(+yy+3.5).toFixed(1)}" text-anchor="end">${Math.round(v)}</text>`; }
+  return s;
+}
+function drawEffWeek(F){
+  const svg = $("effWeek"), Wd = chartWidth(svg), H = 160, L = 34, Rm = 10, T = 12, B = 22;
+  const pw = Wd-L-Rm, ph = H-T-B, slot = pw/7;
+  svg.setAttribute("viewBox", `0 0 ${Wd} ${H}`);
+  const r = F.cur.range, peak = Math.max(50, F.cum[F.cum.length-1]||0, F.last[6]||0, r ? r.hi : 0);
+  const step = niceStep(peak*1.08), yMax = Math.ceil(peak*1.08/step)*step;
+  const y = v => T+ph-(Math.max(0,v)/yMax)*ph, xc = j => L+(j+.5)*slot;
+  const sel = wSel!==null ? Math.min(wSel, F.todayIdx) : null, at = sel!==null ? sel : F.todayIdx;
+  let s = gridY(L, pw, yMax, step, y);
+  if(r) s += `<rect class="band" x="${L}" y="${y(r.hi).toFixed(1)}" width="${pw.toFixed(1)}" height="${(y(r.lo)-y(r.hi)).toFixed(1)}" rx="4"/>`;
+  s += `<path class="lastwk" d="${F.last.map((v,j)=>(j?"L":"M")+xc(j).toFixed(1)+" "+y(v).toFixed(1)).join("")}"/>`;
+  s += `<path class="eln" d="${F.cum.map((v,j)=>(j?"L":"M")+xc(j).toFixed(1)+" "+y(v).toFixed(1)).join("")}"/>`;
+  F.cum.forEach((v,j)=>{ if(F.daily[77+j+21]>0 || j===at) s += `<circle class="edot" cx="${xc(j).toFixed(1)}" cy="${y(v).toFixed(1)}" r="${j===at?4.5:3.5}"/>`; });
+  DAYS.forEach((dn,j)=>{ s += `<text class="ax${j===F.todayIdx?" today":""}" x="${xc(j).toFixed(1)}" y="${H-6}" text-anchor="middle">${dn}</text>`; });
+  if(sel!==null) s += `<line class="xh" x1="${xc(at).toFixed(1)}" x2="${xc(at).toFixed(1)}" y1="${T}" y2="${T+ph}"/>`;
+  s += `<rect class="hit" x="${L}" y="${T}" width="${pw.toFixed(1)}" height="${ph}"/>`;
+  svg.innerHTML = s;
+  svg._g = {Wd, L, slot, last:F.todayIdx};
+  const d = add(F.curMon, at), dayE = F.daily[77+at+21];
+  const sessions = (A[d]||[]).filter(a=>num(a.trimp) && a.trimp>=1).map(a=>`${sportName(a.type)}${a.dist>0?" "+(a.dist/1000).toFixed(1)+" km":""} ${Math.round(a.trimp)}`);
+  $("ewRead").innerHTML = `<div class="rd">${at===F.todayIdx ? "Today, "+dayLabel(d) : dayLabel(d)}</div>`
+    + (dayE>0 ? `That day: <b>${Math.round(dayE)}</b> (${sessions.join(" · ")})` : "Rest day") + ` · Week so far: <b>${Math.round(F.cum[at])}</b>`;
+}
+function drawEffort(F){
+  const svg = $("effChart"), Wd = chartWidth(svg), H = 210, L = 34, Rm = 8, T = 14, B = 22;
+  const pw = Wd-L-Rm, ph = H-T-B, slot = pw/84;
+  svg.setAttribute("viewBox", `0 0 ${Wd} ${H}`);
+  const peak = Math.max(50, ...F.roll, ...F.weeks.map(w=>Math.max(w.e, w.range ? w.range.hi : 0)));
+  const step = niceStep(peak*1.08), yMax = Math.ceil(peak*1.08/step)*step;
+  const x = i => L+(i+.5)*slot, y = v => T+ph-(Math.max(0,v)/yMax)*ph;
+  const sel = eSel!==null ? Math.min(eSel, F.n-1) : null, at = sel!==null ? sel : F.n-1;
+  let s = gridY(L, pw, yMax, step, y);
+  F.weeks.forEach(w=>{
+    if(!w.range) return;
+    const cx = L+(7*w.k+3.5)*slot, bw = Math.min(32, 7*slot-1);
+    s += `<rect class="band" x="${(cx-bw/2).toFixed(1)}" y="${y(w.range.hi).toFixed(1)}" width="${bw.toFixed(1)}" height="${(y(w.range.lo)-y(w.range.hi)).toFixed(1)}" rx="3"/>`;
+  });
+  F.weeks.forEach(w=>{
+    if(w.e<=0) return;
+    const cx = L+(7*w.k+3.5)*slot, bw = Math.min(22, 7*slot-6), x0 = cx-bw/2, x1 = cx+bw/2, yt = y(w.e), yb = y(0), r = Math.min(4, bw/2, yb-yt);
+    const on = sel!==null && Math.floor(sel/7)===w.k;
+    s += `<path class="ebar${w.partial?" partial":""}${on?" on":""}" d="M${x0.toFixed(1)} ${yb.toFixed(1)}V${(yt+r).toFixed(1)}Q${x0.toFixed(1)} ${yt.toFixed(1)} ${(x0+r).toFixed(1)} ${yt.toFixed(1)}H${(x1-r).toFixed(1)}Q${x1.toFixed(1)} ${yt.toFixed(1)} ${x1.toFixed(1)} ${(yt+r).toFixed(1)}V${yb.toFixed(1)}Z"/>`;
+  });
+  F.weeks.forEach(w=>{ if(w.k%2===0) s += `<text class="ax" x="${(L+(7*w.k+3.5)*slot).toFixed(1)}" y="${H-6}" text-anchor="middle">${dm(w.start)}</text>`; });
+  if(F.fit && F.fit.label!=="none") s += `<line class="tr" x1="${x(0).toFixed(1)}" y1="${y(F.fit.s).toFixed(1)}" x2="${x(F.n-1).toFixed(1)}" y2="${y(F.fit.e).toFixed(1)}"/>`;
+  s += `<path class="eln" d="${F.roll.map((v,i)=>(i?"L":"M")+x(i).toFixed(1)+" "+y(v).toFixed(1)).join("")}"/>`;
+  if(sel!==null) s += `<line class="xh" x1="${x(at).toFixed(1)}" x2="${x(at).toFixed(1)}" y1="${T}" y2="${T+ph}"/>`;
+  s += `<circle class="edot" cx="${x(at).toFixed(1)}" cy="${y(F.roll[at]).toFixed(1)}" r="4"/>`;
+  s += `<rect class="hit" x="${L}" y="${T}" width="${pw.toFixed(1)}" height="${ph}"/>`;
+  svg.innerHTML = s;
+  svg._g = {Wd, L, slot, last:F.n-1};
+  const d = add(F.first, at), w = F.weeks[Math.floor(at/7)];
+  $("eRead").innerHTML = `<div class="rd">${at===F.n-1 ? "Today, "+dayLabel(d) : dayLabel(d)}</div>`
+    + `7 days to ${dm(d)}: <b>${Math.round(F.roll[at])}</b> · Week of ${dm(w.start)}: <b>${Math.round(w.e)}</b>${w.partial?" so far":""}`
+    + (w.range ? ` · range ${Math.round(w.range.lo)}–${Math.round(w.range.hi)}` : "");
+}
+function renderEffort(F){
+  const cov = $("effCover");
+  if(mode!=="demo" && (!data.oldest || data.oldest>F.base)){
+    cov.hidden = false; cov.textContent = `Your weekly ranges need data back to ${dm(F.base)}. Tap ↻ to load it.`;
+  } else cov.hidden = true;
+  const c = F.cur, chip = $("effChip");
+  $("effNow").textContent = Math.round(c.e);
+  chip.className = "chip " + c.status.k; chip.textContent = c.status.t;
+  $("effRange").innerHTML = c.range
+    ? `Your range this week: <b>${Math.round(c.range.lo)}–${Math.round(c.range.hi)}</b>, from your average of ${Math.round(c.range.avg)} over the previous 3 weeks`
+      + (c.e < c.range.lo ? ` · <b>${Math.round(c.range.lo - c.e)}</b> to go to reach it` : c.e > c.range.hi ? ` · <b>${Math.round(c.e - c.range.hi)}</b> over the top` : "")
+    : "Your range appears once there are 3 weeks of training before this one.";
+  drawEffWeek(F);
+  const f = F.fit, arrow = !f ? "" : Math.abs(f.e-f.s)<1 ? "→" : f.e>f.s ? "↗" : "↘";
+  const vsAvg = F.avgFull>0 ? sgnPct((F.last7-F.avgFull)/F.avgFull*100)+" vs your average week" : "rolling, to today";
+  const phSub = (F.perHr7!==null && F.perHrAvg) ? `last 7 days · ${sgnPct((F.perHr7-F.perHrAvg)/F.perHrAvg*100)} vs your usual ${Math.round(F.perHrAvg)}` : "last 7 days";
+  $("eStats").innerHTML =
+      `<div class="stat"><div class="sl">Last 7 days</div><div class="sv">${Math.round(F.last7)}</div><div class="ss">${vsAvg}</div></div>`
+    + `<div class="stat"><div class="sl">Average week</div><div class="sv">${Math.round(F.avgFull)}</div><div class="ss">previous 11 weeks</div></div>`
+    + `<div class="stat"><div class="sl">Effort per hour</div><div class="sv">${F.perHr7!==null ? Math.round(F.perHr7) : "—"}</div><div class="ss">${phSub}</div></div>`
+    + `<div class="stat"><div class="sl">12-week trend</div><div class="sv">${f && f.label!=="none" ? f.label : "—"}</div><div class="ss">${f && f.label!=="none" ? `${arrow} ${Math.round(f.s)} → ${Math.round(f.e)} a week` : "no training yet"}</div></div>`;
+  drawEffort(F);
+  $("eTable").innerHTML = F.weeks.slice().reverse().map(w=>
+    `<tr><td>${dm(w.start)} – ${dm(w.end)}${w.partial?" (so far)":""}</td><td>${Math.round(w.e)}</td><td>${w.range ? Math.round(w.range.lo)+"–"+Math.round(w.range.hi) : "—"}</td><td>${w.hours.toFixed(1)}</td><td><span class="st ${w.status.k}">${w.status.t}</span></td></tr>`).join("");
+  $("effNote").textContent = `Effort is Intervals.icu's TRIMP: every minute counts more the higher your heart rate, so a hard 35-minute 10 km scores far more than an easy 50-minute one. Your range is ${R.effLo}–${R.effHi}% of your average over the previous 3 full weeks; above ${R.effWarn}% shows as well above. Effort per hour shows how hard your training was, regardless of how much you did. It is the same idea as Strava's Relative Effort, but the numbers won't match Strava's.`
+    + (F.noHR ? ` ${F.noHR} session${F.noHR>1?"s":""} without heart rate count${F.noHR>1?"":"s"} as zero.` : "");
+}
+
 /* ---------- Trends screen ---------- */
 function renderTrends(today){
   if(!data){ $("trendsConnect").hidden = false; $("trendsBody").hidden = true; return; }
   $("trendsConnect").hidden = true; $("trendsBody").hidden = false;
-  const M = mileageModel(today), V = vo2Model(today, vo2N);
-  TR = {M, V};
+  const M = mileageModel(today), V = vo2Model(today, vo2N), F = effortModel(today);
+  TR = {M, V, F};
 
   // mileage
   const need = add(M.first,-6), cov = $("mileCover");
@@ -739,6 +925,8 @@ function renderTrends(today){
     const prev = arr[i+1], diff = prev && !w.partial ? w.km-prev.km : null;
     return `<tr><td>${dm(w.start)} – ${dm(w.end)}${w.partial?" (so far)":""}</td><td>${km1(w.km)}</td><td>${w.runDays}</td><td>${diff===null ? "—" : sgn(diff)}</td></tr>`;
   }).join("");
+
+  renderEffort(F);
 
   // VO2max
   $("vo2_28").setAttribute("aria-pressed", String(vo2N===28)); $("vo2_84").setAttribute("aria-pressed", String(vo2N===84));
@@ -773,7 +961,7 @@ function setView(v, fromHash){
   const next = v==="trends" ? "trends" : "today";
   if(!fromHash){ try{ location.hash = next; }catch(e){} }
   if(next===view) return;
-  view = next; mSel = null; vSel = null;
+  view = next; mSel = null; vSel = null; eSel = null; wSel = null;
   applyView(); render(); window.scrollTo(0,0);
 }
 $("tabToday").onclick = ()=>setView("today");
@@ -789,21 +977,23 @@ function wireChart(id, which){
   const set = i => {
     if(!TR) return;
     if(which==="m"){ if(mSel===i) return; mSel = i; drawMileage(TR.M); }
+    else if(which==="e"){ if(eSel===i) return; eSel = i; drawEffort(TR.F); }
+    else if(which==="w"){ if(wSel===i) return; wSel = i; drawEffWeek(TR.F); }
     else { if(vSel===i) return; vSel = i; drawVo2(TR.V); }
   };
   svg.addEventListener("pointerdown", ev=>{ const i = idxAt(ev); if(i!==null) set(i); });
   svg.addEventListener("pointermove", ev=>{ if(ev.pointerType==="mouse" || ev.buttons){ const i = idxAt(ev); if(i!==null) set(i); } });
   svg.addEventListener("pointerleave", ev=>{ if(ev.pointerType==="mouse") set(null); });
   svg.addEventListener("keydown", ev=>{
-    const g = svg._g; if(!g) return; const cur = (which==="m" ? mSel : vSel); const c = cur===null ? g.last : cur;
+    const g = svg._g; if(!g) return; const cur = which==="m" ? mSel : which==="e" ? eSel : which==="w" ? wSel : vSel; const c = cur===null ? g.last : cur;
     if(ev.key==="ArrowLeft"){ set(Math.max(0,c-1)); ev.preventDefault(); }
     else if(ev.key==="ArrowRight"){ set(Math.min(g.last,c+1)); ev.preventDefault(); }
     else if(ev.key==="Escape") set(null);
   });
 }
-wireChart("mileChart","m"); wireChart("vo2Chart","v");
-let rsz; window.addEventListener("resize", ()=>{ clearTimeout(rsz); rsz = setTimeout(()=>{ if(view==="trends" && TR){ drawMileage(TR.M); if(!$("vo2Body").hidden) drawVo2(TR.V); } }, 150); });
-if(document.fonts && document.fonts.ready) document.fonts.ready.then(()=>{ if(view==="trends" && TR){ drawMileage(TR.M); if(!$("vo2Body").hidden) drawVo2(TR.V); } });
+wireChart("mileChart","m"); wireChart("vo2Chart","v"); wireChart("effChart","e"); wireChart("effWeek","w");
+let rsz; window.addEventListener("resize", ()=>{ clearTimeout(rsz); rsz = setTimeout(()=>{ if(view==="trends" && TR){ drawMileage(TR.M); if(TR.F){ drawEffort(TR.F); drawEffWeek(TR.F); } if(!$("vo2Body").hidden) drawVo2(TR.V); } }, 150); });
+if(document.fonts && document.fonts.ready) document.fonts.ready.then(()=>{ if(view==="trends" && TR){ drawMileage(TR.M); if(TR.F){ drawEffort(TR.F); drawEffWeek(TR.F); } if(!$("vo2Body").hidden) drawVo2(TR.V); } });
 
 /* ---------- live data ---------- */
 function slimWellness(w){
@@ -813,7 +1003,7 @@ function slimWellness(w){
 }
 function slimActivity(a){
   const o = {start_date_local:a.start_date_local, type:a.type};
-  ["distance","moving_time","icu_training_load","icu_intensity"].forEach(k=>{ if(num(a[k])) o[k] = a[k]; });
+  ["distance","moving_time","icu_training_load","icu_intensity","trimp"].forEach(k=>{ if(num(a[k])) o[k] = a[k]; });
   const z = a.icu_hr_zone_times; if(Array.isArray(z)) o.icu_hr_zone_times = z; else if(z && Array.isArray(z.zones)) o.icu_hr_zone_times = z.zones;
   if(a.icu_hrr!==undefined && a.icu_hrr!==null) o.icu_hrr = a.icu_hrr;
   return o;
@@ -879,6 +1069,7 @@ function saveRulesAndPlan(){
   RULE_KEYS.forEach(k=>{ const v = Number($("r_"+k).value); if(Number.isFinite(v)) R[k] = v; });
   R.hardZone = Math.min(7, Math.max(1, Math.round(R.hardZone)));
   R.steadyPct = Math.min(50, Math.max(1, R.steadyPct));
+  R.effLo = Math.min(100, Math.max(10, R.effLo)); R.effHi = Math.max(R.effLo+5, R.effHi); R.effWarn = Math.max(R.effHi, R.effWarn);
   PLAN = PLAN.map((p,i)=>({t:$("pt"+i).value.trim()||p.t, k:$("pk"+i).value}));
   store.set("rules", R); store.set("plan", PLAN);
 }
