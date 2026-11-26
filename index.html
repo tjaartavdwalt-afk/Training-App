@@ -131,7 +131,7 @@ h2{font-family:var(--display);font-size:20px;font-weight:600;margin:0;letter-spa
 .tr{fill:none;stroke:var(--viz-trend);stroke-width:1.5;stroke-dasharray:5 4}
 .dotm{fill:var(--viz-line);stroke:var(--surface);stroke-width:2}
 .dotm.vo2{fill:var(--viz-vo2)}
-.endlbl{fill:var(--ink);font-family:var(--display);font-size:13px;font-weight:700}
+.endlbl{fill:var(--ink);font-family:var(--display);font-size:13px;font-weight:700;paint-order:stroke;stroke:var(--surface);stroke-width:4px;stroke-linejoin:round}
 .xh{stroke:var(--muted);stroke-width:1}
 .rug{stroke:var(--viz-rug);stroke-width:1.5}
 .hit{fill:transparent}
@@ -198,6 +198,8 @@ input:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px}
 .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
 .msg{font-size:13px;margin-top:8px;color:var(--muted)}
 .note{font-size:12px;color:var(--muted);line-height:1.5;margin-top:8px}
+.check{display:flex;align-items:center;gap:10px;margin-top:14px;font-size:14px;line-height:1.4;cursor:pointer}
+.check input{width:22px;height:22px;padding:0;margin:0;flex:none;accent-color:var(--accent)}
 </style>
 </head>
 <body>
@@ -376,7 +378,9 @@ input:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px}
         <div class="field"><label for="r_effHi">Effort range: high, %</label><input id="r_effHi" type="number" inputmode="numeric"></div>
         <div class="field"><label for="r_effWarn">Effort: well above at %</label><input id="r_effWarn" type="number" inputmode="numeric"></div>
       </div>
+      <label class="check"><input type="checkbox" id="vo2dec"> VO2max with one decimal, from each run's Garmin file</label>
       <p class="note">The 12-week trend line is fitted to your rolling 7-day total. If it changes by less than this share of your average week, the trend shows as steady. The same applies to the effort trend. Your weekly effort range comes from your average over the previous 3 full weeks. These are your own heuristics, not medical limits.</p>
+      <p class="note">VO2max decimals: the app downloads each outdoor run's original file from Intervals.icu once (about 0.3 MB per run, only for the period you are viewing) and keeps just the number.</p>
     </section>
 
     <section class="card">
@@ -393,10 +397,11 @@ input:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px}
 "use strict";
 /* ============ My Training ============
    Today: GO / EASY / REST each morning from the athlete's own rules.
-   Trends: 12-week running mileage and the Garmin VO2max estimate.
+   Trends: 12-week running mileage, weekly effort (TRIMP) and the Garmin VO2max estimate,
+   with one decimal read from each run's original Garmin file (FIT message 140, field 7).
    Data: Intervals.icu API v1 (Garmin → Intervals.icu). Nothing leaves the phone except the requests to intervals.icu. */
 const DEMO = null;
-const VERSION = "1.3";
+const VERSION = "1.4";
 
 const DEF_RULES = {rhrEasy:48, rhrRest:50, sleepEasy:75, sleepTarget:80, formEasy:-20, formWatch:-10, hardMin:12, hardZone:3, load3:200, hrrLow:40, steadyPct:10, effLo:80, effHi:130, effWarn:150};
 const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
@@ -434,6 +439,8 @@ let PLAN = store.get("plan", null) || DEF_PLAN.map(p=>({...p}));
 let data = null, mode = "none", lastError = "";
 let view = "today", vo2N = store.get("vo2N", 28) === 84 ? 84 : 28;
 let mSel = null, vSel = null, eSel = null, wSel = null, TR = null, daySel = null;   // chart selections, last trends model, selected day in the strip
+let VF = store.get("vo2fit", {}) || {};                                            // VO2max read from run files: activity id -> {d, s, v}
+let vo2Job = {running:false, done:0, total:0, left:0, err:""};
 
 /* ---------- dates ---------- */
 const $ = id => document.getElementById(id);
@@ -454,6 +461,7 @@ const sgn = v => num(v) ? (v>=0?"+":"−")+Math.abs(v).toFixed(1) : "—";
 const km1 = v => num(v) ? v.toFixed(1) : "—";
 const sgnPct = v => (v>=0?"+":"−")+Math.abs(Math.round(v))+"%";
 const fmtV = v => Number.isInteger(v) ? String(v) : v.toFixed(1);
+const vfmt = p => p.dec ? p.v.toFixed(1) : String(p.v);           // decimals only for values read from run files
 
 /* ---------- data model ---------- */
 let W = {}, A = {};
@@ -671,17 +679,45 @@ function mileageModel(today){
   return {first, today, n, roll, weeks, fit, avgFull, last7:roll[n-1], thisWeek:weeks[11].km};
 }
 
+function vo2Files(){ return store.get("vo2dec", true) ? (mode==="demo" ? ((DEMO && DEMO.vo2fit) || {}) : VF) : {}; }
+function vo2DecByDay(){                                                   // last run-file reading of each day
+  const m = {};
+  Object.values(vo2Files()).forEach(e=>{
+    if(!e || !num(e.v) || !e.d) return; const o = m[e.d];
+    if(!o || String(e.s||"") >= o.s) m[e.d] = {v:e.v, s:String(e.s||"")};
+  });
+  return m;
+}
 function vo2Model(today, N){
-  const start = add(today,-(N-1));
-  let cur = null;
-  for(let i=1;i<=150;i++){ const v=(W[add(start,-i)]||{}).vo2; if(num(v)){ cur=v; break; } }   // value carried into the window
-  const pts = []; let readings = 0, lastDay = null;
-  for(let i=0;i<N;i++){
-    const d = add(start,i), v = (W[d]||{}).vo2, r = num(v);
-    if(r){ cur = v; readings++; lastDay = d; }
-    pts.push({d, v:cur, r});
-  }
-  return {start, N, pts, readings, lastDay, now:cur, startVal:pts[0].v};
+  const start = add(today,-(N-1)), D = vo2DecByDay();
+  const wv = d => num((W[d]||{}).vo2) ? W[d].vo2 : null;
+  const fits = (w, c) => c.dec ? (w===Math.round(c.v) || w===Math.floor(c.v)) : w===c.v;
+  const build = first => {                                                // first = first day with a run-file reading; null = whole numbers only
+    let clash = 0;
+    const step = (d, cur, inWin) => {
+      const w = wv(d);
+      if(first && d>=first){
+        if(D[d]) return {v:D[d].v, dec:true};
+        if(w!==null && cur && !fits(w, cur)){ if(inWin) clash++; return {v:w, dec:false}; }   // Garmin's number moved without a run file: trust Garmin
+        return null;
+      }
+      return w!==null ? {v:w, dec:false} : null;
+    };
+    let cur = null;
+    for(let i=150;i>=1;i--){ const o = step(add(start,-i), cur, false); if(o) cur = o; }   // value carried into the window
+    const pts = []; let readings = 0, decReads = 0, lastDay = null;
+    for(let i=0;i<N;i++){
+      const d = add(start,i), o = step(d, cur, true);
+      if(o){ cur = o; readings++; if(o.dec) decReads++; lastDay = d; }
+      pts.push({d, v:cur ? cur.v : null, dec:cur ? cur.dec : false, r:!!o});
+    }
+    return {start, N, pts, readings, decReads, lastDay, first, clash, now:cur ? cur.v : null, nowDec:cur ? cur.dec : false,
+            startVal:pts[0].v, startDec:pts[0].dec};
+  };
+  const first = Object.keys(D).filter(d=>d<=today).sort()[0] || null;
+  const V = build(first);
+  if(V.clash < 3) return V;
+  return Object.assign(build(null), {clashDays:V.clash});                  // run files keep disagreeing with Garmin: show Garmin's whole number
 }
 
 /* ---------- Trends: charts ---------- */
@@ -727,16 +763,16 @@ function drawMileage(M){
 }
 
 function drawVo2(V){
-  const svg = $("vo2Chart"), Wd = chartWidth(svg), H = 170, L = 30, Rm = 12, T = 14, B = 22;
+  const svg = $("vo2Chart"), Wd = chartWidth(svg), H = 170, L = 30, Rm = 14, T = 14, B = 22;
   const pw = Wd-L-Rm, ph = H-T-B, N = V.N, slot = pw/N;
   svg.setAttribute("viewBox", `0 0 ${Wd} ${H}`);
-  const vals = V.pts.map(p=>p.v).filter(num);
+  const vals = V.pts.map(p=>p.v).filter(num), padv = V.pts.some(p=>p.dec && num(p.v)) ? 0.5 : 1;
   const st = (Math.max(...vals)-Math.min(...vals)) > 4 ? 2 : 1;
-  const lo = Math.floor((Math.min(...vals)-1)/st)*st, hi = Math.ceil((Math.max(...vals)+1)/st)*st;
+  const lo = Math.floor((Math.min(...vals)-padv)/st)*st, hi = Math.max(lo+2*st, Math.ceil((Math.max(...vals)+padv)/st)*st);
   const x = i => L+(i+.5)*slot, y = v => T+(hi-v)/(hi-lo)*ph;
   const sel = vSel!==null ? Math.min(vSel, N-1) : null;
   let s = "";
-  for(let v=lo; v<=hi+1e-9; v+=st){ const yy=y(v).toFixed(1); s += `<line class="gl" x1="${L}" x2="${L+pw}" y1="${yy}" y2="${yy}"/><text class="ax" x="${L-6}" y="${(+yy+3.5).toFixed(1)}" text-anchor="end">${fmtV(v)}</text>`; }
+  for(let v=lo; v<=hi+1e-9; v+=st){ const yy=y(v).toFixed(1); s += `<line class="gl" x1="${L}" x2="${L+pw}" y1="${yy}" y2="${yy}"/><text class="ax" x="${L-6}" y="${(+yy+3.5).toFixed(1)}" text-anchor="end">${v}</text>`; }
   const every = N===28 ? 7 : 14, half = 18;                         // date labels from today backwards, skipping any that would touch
   let leftEdge = Infinity;
   for(let i=N-1; i>=0; i-=every){
@@ -754,12 +790,16 @@ function drawVo2(V){
   });
   if(lastI>=0) path += `H${x(lastI).toFixed(1)}`;
   s += `<path class="ln vo2" d="${path}"/>`;
-  changes.forEach(i=>{ if(i!==lastI) s += `<circle class="dotm vo2" cx="${x(i).toFixed(1)}" cy="${y(V.pts[i].v).toFixed(1)}" r="4"/>`; });
+  if(changes.length<=12) changes.forEach(i=>{ if(i!==lastI) s += `<circle class="dotm vo2" cx="${x(i).toFixed(1)}" cy="${y(V.pts[i].v).toFixed(1)}" r="4"/>`; });
   const at = sel!==null ? sel : lastI;
   if(sel!==null) s += `<line class="xh" x1="${x(at).toFixed(1)}" x2="${x(at).toFixed(1)}" y1="${T}" y2="${T+ph}"/>`;
   if(at>=0 && num(V.pts[at].v)){
     s += `<circle class="dotm vo2" cx="${x(at).toFixed(1)}" cy="${y(V.pts[at].v).toFixed(1)}" r="4"/>`;
-    if(sel===null) s += `<text class="endlbl" x="${x(at).toFixed(1)}" y="${(y(V.pts[at].v)-10).toFixed(1)}" text-anchor="middle">${fmtV(V.pts[at].v)}</text>`;
+    if(sel===null){                                                       // label away from the line: below the dot when the line comes down into it
+      let pl = null; for(let i=at-1;i>=0;i--){ if(num(V.pts[i].v) && V.pts[i].v!==V.pts[at].v){ pl = V.pts[i].v; break; } }
+      const yv = y(V.pts[at].v), ly = (pl!==null && pl>V.pts[at].v && yv+20 <= T+ph-8) ? yv+20 : yv-10;
+      s += `<text class="endlbl" x="${(x(at)+4).toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="end">${vfmt(V.pts[at])}</text>`;
+    }
   }
   s += `<rect class="hit" x="${L}" y="${T}" width="${pw.toFixed(1)}" height="${ph}"/>`;
   svg.innerHTML = s;
@@ -767,8 +807,10 @@ function drawVo2(V){
 
   const p = V.pts[Math.max(0,at)];
   let since = null; for(let i=Math.max(0,at); i>=0; i--){ if(V.pts[i].r){ since = V.pts[i].d; break; } }
+  const how = p.r ? (p.dec ? "from that day's run file" : V.first ? "Garmin's whole number that day" : "Garmin reading that day")
+                  : since ? "no new reading, holding since "+dm(since) : "carried from before this period";
   $("vRead").innerHTML = `<div class="rd">${at===N-1 ? "Today, "+dayLabel(p.d) : dayLabel(p.d)}</div>`
-    + (num(p.v) ? `<b>${fmtV(p.v)}</b> ml/kg/min · ${p.r ? "Garmin reading that day" : since ? "no reading that day, holding since "+dm(since) : "carried from before this period"}` : "No value yet");
+    + (num(p.v) ? `<b>${vfmt(p)}</b> ml/kg/min · ${how}` : "No value yet");
 }
 
 /* ---------- Trends: weekly effort (Intervals.icu TRIMP) ---------- */
@@ -933,15 +975,36 @@ function renderTrends(today){
   const has = V.pts.some(p=>num(p.v));
   $("vo2Empty").hidden = has; $("vo2Body").hidden = !has;
   if(!has) return;
-  $("vo2Now").textContent = fmtV(V.now);
-  const dv = num(V.startVal) ? V.now-V.startVal : null;
-  const deltaTxt = dv===null ? "" : dv===0 ? `No change since ${dm(V.start)}` : `${dv>0?"↑":"↓"} <b>${fmtV(Math.abs(dv))}</b> since ${dm(V.start)}`;
+  $("vo2Now").textContent = vfmt({v:V.now, dec:V.nowDec});
+  let deltaTxt = "";
+  if(num(V.startVal)){
+    const both = V.nowDec && V.startDec, dv = both ? Math.round((V.now-V.startVal)*10)/10 : Math.round(V.now)-Math.round(V.startVal);
+    deltaTxt = dv===0 ? `No change since ${dm(V.start)}` : `${dv>0?"↑":"↓"} <b>${both ? Math.abs(dv).toFixed(1) : Math.abs(dv)}</b> since ${dm(V.start)}`;
+  }
   const lastTxt = !V.lastDay ? "no reading in this period" : V.lastDay===today ? "last reading today" : "last reading " + dayLabel(V.lastDay);
   $("vo2Delta").innerHTML = [deltaTxt, lastTxt].filter(Boolean).join(" · ");
   drawVo2(V);
-  const ev = []; let prev = num(V.startVal) ? V.startVal : null;
-  V.pts.forEach(p=>{ if(p.r){ if(prev!==null && p.v!==prev) ev.push(`${fmtV(prev)} → ${fmtV(p.v)} on ${dm(p.d)}`); prev = p.v; } });
-  $("vo2Note").textContent = `${V.readings} readings in ${vo2N===28 ? "28 days" : "12 weeks"}. ${ev.length ? "Changes: " + ev.join(" · ") + "." : "No change in this period."} Garmin updates VO2max after outdoor runs, in whole numbers. Ticks along the bottom mark days with a reading.`;
+  const per = vo2N===28 ? "28 days" : "12 weeks", decOn = store.get("vo2dec", true);
+  let note;
+  if(V.first){
+    const dvs = V.pts.filter(p=>p.dec && num(p.v)).map(p=>p.v);
+    note = `${V.decReads} reading${V.decReads===1?"":"s"} from run files in ${per}`
+      + (dvs.length>1 ? ` · range ${Math.min(...dvs).toFixed(1)}–${Math.max(...dvs).toFixed(1)}` : "") + ". "
+      + "The decimal comes from each run's original Garmin file, read through Intervals.icu. Garmin's own screens round it to a whole number. It shows the direction sooner, but it doesn't make the estimate more accurate."
+      + (V.first > V.start ? ` Before ${dm(V.first)}: Garmin's whole number.` : "");
+  } else {
+    const ev = []; let prev = num(V.startVal) ? V.startVal : null;
+    V.pts.forEach(p=>{ if(p.r){ if(prev!==null && p.v!==prev) ev.push(`${fmtV(prev)} → ${fmtV(p.v)} on ${dm(p.d)}`); prev = p.v; } });
+    note = `${V.readings} readings in ${per}. ${ev.length ? "Changes: " + ev.join(" · ") + "." : "No change in this period."} Garmin updates VO2max after outdoor runs; this is its whole number.`;
+  }
+  if(V.clashDays) note += ` On ${V.clashDays} days the run files didn't match Garmin's own number, so this shows Garmin's whole number.`;
+  note += " Ticks along the bottom mark days with a reading.";
+  if(mode==="demo"){ if(decOn && DEMO && DEMO.vo2fitNote) note += " " + DEMO.vo2fitNote; }
+  else if(!decOn) note += " Decimals are off in ⚙ Settings.";
+  else if(vo2Job.running) note += ` Reading run files: ${vo2Job.done} of ${vo2Job.total}…`;
+  else if(vo2Job.err) note += ` Couldn't read the run files from Intervals.icu (${vo2Job.err==="auth" ? "key refused" : vo2Job.err==="net" ? "no connection" : vo2Job.err}). It tries again on the next refresh.`;
+  else if(vo2Job.left>0) note += ` ${vo2Job.left} older run file${vo2Job.left===1?"":"s"} still to read; ${vo2Job.left===1?"it loads":"they load"} on the next refresh${vo2Job.left>20?"es":""} (↻).`;
+  $("vo2Note").textContent = note;
 }
 
 /* ---------- render & views ---------- */
@@ -968,7 +1031,7 @@ $("tabToday").onclick = ()=>setView("today");
 $("tabTrends").onclick = ()=>setView("trends");
 window.addEventListener("hashchange", ()=>setView(location.hash==="#trends" ? "trends" : "today", true));
 $("vo2_28").onclick = ()=>{ vo2N = 28; vSel = null; store.set("vo2N", 28); render(); };
-$("vo2_84").onclick = ()=>{ vo2N = 84; vSel = null; store.set("vo2N", 84); render(); };
+$("vo2_84").onclick = ()=>{ vo2N = 84; vSel = null; store.set("vo2N", 84); render(); setTimeout(loadVo2Fit, 0); };
 
 function wireChart(id, which){
   const svg = $(id);
@@ -995,6 +1058,79 @@ wireChart("mileChart","m"); wireChart("vo2Chart","v"); wireChart("effChart","e")
 let rsz; window.addEventListener("resize", ()=>{ clearTimeout(rsz); rsz = setTimeout(()=>{ if(view==="trends" && TR){ drawMileage(TR.M); if(TR.F){ drawEffort(TR.F); drawEffWeek(TR.F); } if(!$("vo2Body").hidden) drawVo2(TR.V); } }, 150); });
 if(document.fonts && document.fonts.ready) document.fonts.ready.then(()=>{ if(view==="trends" && TR){ drawMileage(TR.M); if(TR.F){ drawEffort(TR.F); drawEffWeek(TR.F); } if(!$("vo2Body").hidden) drawVo2(TR.V); } });
 
+/* ---------- VO2max decimals from each run's original Garmin file ---------- */
+// Garmin writes the post-run VO2max into an undocumented FIT message (140, field 7) as METs x 65536.
+// VO2max in ml/kg/min = value x 3.5 / 65536. Garmin's own screens round it to a whole number.
+function fitVo2(b){
+  if(!b || b.length<14 || b[8]!==0x2E || b[9]!==0x46 || b[10]!==0x49 || b[11]!==0x54) return null;   // ".FIT"
+  const dv = new DataView(b.buffer, b.byteOffset, b.byteLength), hs = b[0];
+  const end = Math.min(b.length, hs + dv.getUint32(4, true));
+  const defs = []; let p = hs, out = null;
+  while(p < end){
+    const h = b[p++];
+    if(h & 0x80){ const d = defs[(h>>5)&3]; if(!d) return out; p += d.size; continue; }    // data record with a compressed timestamp
+    const lt = h & 15;
+    if(h & 0x40){                                                                         // definition record
+      if(p+5 > end) return out;
+      const big = b[p+1]===1, g = dv.getUint16(p+2, !big), nf = b[p+4]; p += 5;
+      let size = 0, off = -1, sz = 0;
+      for(let i=0;i<nf;i++){ if(p+3 > end) return out; if(b[p]===7){ off = size; sz = b[p+1]; } size += b[p+1]; p += 3; }
+      if(h & 0x20){ if(p >= end) return out; const nd = b[p++]; for(let i=0;i<nd;i++){ if(p+3 > end) return out; size += b[p+1]; p += 3; } }
+      defs[lt] = {g, big, size, off, sz};
+    } else {                                                                              // data record
+      const d = defs[lt]; if(!d) return out;
+      if(d.g===140 && d.off>=0 && d.sz===4 && p+d.size<=end){ const v = dv.getUint32(p+d.off, !d.big); if(v>0 && v<0xFFFFFFFF) out = v*3.5/65536; }
+      p += d.size;
+    }
+  }
+  return out;
+}
+async function gunzip(u8){
+  if(typeof DecompressionStream!=="function") return null;
+  const s = new Blob([u8]).stream().pipeThrough(new DecompressionStream("gzip"));
+  return new Uint8Array(await new Response(s).arrayBuffer());
+}
+const VO2_BATCH = 20;                                                     // run files per refresh, newest first
+function vo2Candidates(){
+  const from = add(localToday(), -(vo2N===84 ? 91 : 35));                 // only the period on screen, plus a few days to carry a value in
+  return ((data && data.activities) || []).filter(a=>a && a.id && !(a.id in VF) && /run/i.test(a.type||"") && !/virtual/i.test(a.type||"")
+           && (a.moving_time||0)>=600 && String(a.start_date_local||"").slice(0,10)>=from)
+    .sort((a,b)=>String(b.start_date_local).localeCompare(String(a.start_date_local)));
+}
+async function loadVo2Fit(){
+  if(vo2Job.running || mode!=="live" || !store.get("vo2dec", true)) return;
+  const key = store.get("key",""); if(!key) return;
+  const keep = add(localToday(), -200);
+  Object.keys(VF).forEach(id=>{ if(!VF[id] || !VF[id].d || VF[id].d<keep) delete VF[id]; });
+  const all = vo2Candidates(), queue = all.slice(0, VO2_BATCH);
+  vo2Job = {running:queue.length>0, done:0, total:queue.length, left:all.length-queue.length, err:""};
+  if(!queue.length){ store.set("vo2fit", VF); return; }
+  const headers = {Authorization:"Basic " + btoa("API_KEY:" + key)};
+  let stop = false, shown = Date.now();
+  const one = async a => {
+    const r = await fetch("https://intervals.icu/api/v1/activity/" + encodeURIComponent(a.id) + "/file", {headers, cache:"no-store"});
+    const d = String(a.start_date_local).slice(0,10), s = String(a.start_date_local).slice(11,19);
+    if(r.status===401 || r.status===403){ stop = true; vo2Job.err = "auth"; return; }
+    if(r.status===429){ stop = true; return; }                            // rate limited: carry on next refresh
+    if(r.status===404){ VF[a.id] = {d, s, v:null}; return; }              // no original file for this activity
+    if(!r.ok){ stop = true; vo2Job.err = "HTTP " + r.status; return; }
+    let b = new Uint8Array(await r.arrayBuffer());
+    if(b[0]===0x1f && b[1]===0x8b) b = await gunzip(b);
+    let v = null; try{ v = fitVo2(b); }catch(e){ v = null; }
+    VF[a.id] = {d, s, v: num(v) && v>=20 && v<=95 ? Math.round(v*100)/100 : null};   // null = this run has no new VO2max
+  };
+  const worker = async () => {
+    while(!stop && queue.length){
+      const a = queue.shift();
+      try{ await one(a); }catch(e){ stop = true; vo2Job.err = "net"; break; }
+      vo2Job.done++; store.set("vo2fit", VF);
+      if(Date.now()-shown > 1500){ shown = Date.now(); if(view==="trends") render(); }
+    }
+  };
+  try{ await Promise.all([worker(), worker()]); }
+  finally{ vo2Job.running = false; vo2Job.left = vo2Candidates().length; store.set("vo2fit", VF); render(); }
+}
+
 /* ---------- live data ---------- */
 function slimWellness(w){
   const o = {id:String(w.id||w.date||"").slice(0,10)};
@@ -1002,7 +1138,7 @@ function slimWellness(w){
   return o;
 }
 function slimActivity(a){
-  const o = {start_date_local:a.start_date_local, type:a.type};
+  const o = {id:a.id, start_date_local:a.start_date_local, type:a.type};
   ["distance","moving_time","icu_training_load","icu_intensity","trimp"].forEach(k=>{ if(num(a[k])) o[k] = a[k]; });
   const z = a.icu_hr_zone_times; if(Array.isArray(z)) o.icu_hr_zone_times = z; else if(z && Array.isArray(z.zones)) o.icu_hr_zone_times = z.zones;
   if(a.icu_hrr!==undefined && a.icu_hrr!==null) o.icu_hrr = a.icu_hrr;
@@ -1013,7 +1149,7 @@ async function refresh(){
   if(!key){ render(); return; }
   const btn = $("refresh"); btn.disabled = true; btn.innerHTML = '<span class="spin">↻</span>';
   const newest = localToday(), cache = store.get("cache", null);
-  const long = !cache || cache.longOn!==newest || !cache.oldest || cache.oldest>add(newest,-(LONG_DAYS-5));
+  const long = !cache || cache.fmt!==2 || cache.longOn!==newest || !cache.oldest || cache.oldest>add(newest,-(LONG_DAYS-5));
   const oldest = add(newest, -(long ? LONG_DAYS : SHORT_DAYS));
   const base = "https://intervals.icu/api/v1/athlete/" + encodeURIComponent(athlete);
   const headers = {Authorization:"Basic " + btoa("API_KEY:" + key), Accept:"application/json"};
@@ -1032,11 +1168,11 @@ async function refresh(){
     if(!Array.isArray(wellness) || !Array.isArray(activities)) throw new Error("format");
     const wl = wellness.map(slimWellness).filter(w=>w.id);
     const ac = activities.filter(a=>a && a.type && a.source!=="STRAVA" && !a._note && a.start_date_local).map(slimActivity);
-    if(long) data = {wellness:wl, activities:ac, oldest, longOn:newest, fetchedAt:Date.now()};
+    if(long) data = {wellness:wl, activities:ac, oldest, longOn:newest, fetchedAt:Date.now(), fmt:2};
     else data = {
       wellness: (cache.wellness||[]).filter(w=>String(w.id).slice(0,10)<oldest).concat(wl),
       activities: (cache.activities||[]).filter(a=>String(a.start_date_local).slice(0,10)<oldest).concat(ac),
-      oldest: cache.oldest, longOn: cache.longOn, fetchedAt: Date.now()
+      oldest: cache.oldest, longOn: cache.longOn, fetchedAt: Date.now(), fmt: cache.fmt
     };
     store.set("cache", data); mode = "live"; lastError = "";
   }catch(err){
@@ -1048,6 +1184,7 @@ async function refresh(){
     if(c){ data = c; mode = "cached"; }
   }finally{
     btn.disabled = false; btn.textContent = "↻"; render();
+    if(!lastError && mode==="live") setTimeout(loadVo2Fit, 0);
   }
   return !lastError;
 }
@@ -1057,6 +1194,7 @@ const RULE_KEYS = Object.keys(DEF_RULES);
 function openSheet(){
   $("key").value = store.get("key",""); $("athlete").value = store.get("athlete","");
   RULE_KEYS.forEach(k=>$("r_"+k).value = R[k]);
+  $("vo2dec").checked = store.get("vo2dec", true);
   $("planRows").innerHTML = PLAN.map((p,i)=>`<div class="planrow"><b>${DAYS[i]}</b>
       <input id="pt${i}" aria-label="${DAYS_LONG[i]} plan" value="${p.t.replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;")}">
       <select id="pk${i}" aria-label="${DAYS_LONG[i]} session type"><option value="quality">quality</option><option value="easy">easy</option><option value="rest">rest</option></select></div>`).join("");
@@ -1071,6 +1209,8 @@ function saveRulesAndPlan(){
   R.steadyPct = Math.min(50, Math.max(1, R.steadyPct));
   R.effLo = Math.min(100, Math.max(10, R.effLo)); R.effHi = Math.max(R.effLo+5, R.effHi); R.effWarn = Math.max(R.effHi, R.effWarn);
   PLAN = PLAN.map((p,i)=>({t:$("pt"+i).value.trim()||p.t, k:$("pk"+i).value}));
+  const decWas = store.get("vo2dec", true), decNow = $("vo2dec").checked; store.set("vo2dec", decNow);
+  if(decNow && !decWas) setTimeout(loadVo2Fit, 0);
   store.set("rules", R); store.set("plan", PLAN);
 }
 $("gear").onclick = openSheet;
@@ -1087,7 +1227,7 @@ $("saveConn").onclick = async ()=>{
   $("connMsg").textContent = ok ? "Connected ✓ Today's data loaded." : lastError;
   if(ok) setTimeout(closeSheet, 700);
 };
-$("clearConn").onclick = ()=>{ store.del("key"); store.del("athlete"); store.del("cache"); $("key").value=""; $("athlete").value="";
+$("clearConn").onclick = ()=>{ store.del("key"); store.del("athlete"); store.del("cache"); store.del("vo2fit"); VF = {}; $("key").value=""; $("athlete").value="";
   data = null; mode = "none"; lastError = ""; $("connMsg").textContent = "Key and saved data removed from this phone."; };
 $("refresh").onclick = ()=>{ if(store.get("key","")) refresh(); else if(DEMO){ render(); } else openSheet(); };
 
