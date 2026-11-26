@@ -689,34 +689,39 @@ function vo2DecByDay(){                                                   // las
 }
 function vo2Model(today, N){
   const start = add(today,-(N-1)), D = vo2DecByDay();
-  const wv = d => num((W[d]||{}).vo2) ? W[d].vo2 : null;
-  const fits = (w, c) => c.dec ? (w===Math.round(c.v) || w===Math.floor(c.v)) : w===c.v;
-  const build = first => {                                                // first = first day with a run-file reading; null = whole numbers only
-    let clash = 0;
+  const wv = d => num((W[d]||{}).vo2) ? W[d].vo2 : null;           // Garmin's whole number from Intervals.icu wellness
+  const build = first => {                                          // first = earliest day with a run-file decimal; null = whole numbers only
+    let badClash = 0;
+    // cur = {v, dec, wa}: wa is Garmin's whole number in force when this value was set. A held decimal stays only while
+    // Garmin's whole number hasn't moved since the reading; when Garmin steps, the line follows Garmin.
     const step = (d, cur, inWin) => {
       const w = wv(d);
       if(first && d>=first){
-        if(D[d]) return {v:D[d].v, dec:true};
-        if(w!==null && cur && !fits(w, cur)){ if(inWin) clash++; return {v:w, dec:false}; }   // Garmin's number moved without a run file: trust Garmin
-        return null;
+        if(D[d]){
+          const dv = D[d].v;
+          if(inWin && w!==null && Math.abs(dv-w)>=1) badClash++;                      // run file more than a point off Garmin: parsing suspect
+          return {v:dv, dec:true, wa: w!==null ? w : Math.round(dv)};
+        }
+        if(w!==null && cur && w!==cur.wa) return {v:w, dec:false, wa:w};        // Garmin moved since our reading: follow Garmin
+        return null;                                                            // Garmin unchanged (or missing today): hold
       }
-      return w!==null ? {v:w, dec:false} : null;
+      return w!==null ? {v:w, dec:false, wa:w} : null;
     };
     let cur = null;
-    for(let i=150;i>=1;i--){ const o = step(add(start,-i), cur, false); if(o) cur = o; }   // value carried into the window
+    for(let i=150;i>=1;i--){ const o = step(add(start,-i), cur, false); if(o) cur = o; }   // carry a value into the window
     const pts = []; let readings = 0, decReads = 0, lastDay = null;
     for(let i=0;i<N;i++){
       const d = add(start,i), o = step(d, cur, true);
       if(o){ cur = o; readings++; if(o.dec) decReads++; lastDay = d; }
-      pts.push({d, v:cur ? cur.v : null, dec:cur ? cur.dec : false, r:!!o});
+      pts.push({d, v:cur ? cur.v : null, dec:cur ? cur.dec : false, r:!!o, dr:!!(o && o.dec)});
     }
-    return {start, N, pts, readings, decReads, lastDay, first, clash, now:cur ? cur.v : null, nowDec:cur ? cur.dec : false,
-            startVal:pts[0].v, startDec:pts[0].dec};
+    return {start, N, pts, readings, decReads, lastDay, first, badClash,
+            now:cur ? cur.v : null, nowDec:cur ? cur.dec : false, startVal:pts[0].v, startDec:pts[0].dec};
   };
   const first = Object.keys(D).filter(d=>d<=today).sort()[0] || null;
   const V = build(first);
-  if(V.clash < 3) return V;
-  return Object.assign(build(null), {clashDays:V.clash});                  // run files keep disagreeing with Garmin: show Garmin's whole number
+  if(V.badClash < 3) return V;
+  return Object.assign(build(null), {clashDays:V.badClash});       // run files keep disagreeing with Garmin: whole numbers only
 }
 
 /* ---------- Trends: charts ---------- */
@@ -779,7 +784,7 @@ function drawVo2(V){
     if(r+4 > leftEdge) continue;
     s += `<text class="ax" x="${cx.toFixed(1)}" y="${H-6}" text-anchor="${last?"end":"middle"}">${dm(V.pts[i].d)}</text>`; leftEdge = l;
   }
-  V.pts.forEach((p,i)=>{ if(p.r) s += `<line class="rug" x1="${x(i).toFixed(1)}" x2="${x(i).toFixed(1)}" y1="${T+ph-6}" y2="${T+ph}"/>`; });
+  V.pts.forEach((p,i)=>{ if(p.dr) s += `<line class="rug" x1="${x(i).toFixed(1)}" x2="${x(i).toFixed(1)}" y1="${T+ph-6}" y2="${T+ph}"/>`; });
   let path = "", prev = null, lastI = -1; const changes = [];
   V.pts.forEach((p,i)=>{
     if(!num(p.v)) return;
@@ -992,7 +997,7 @@ function renderTrends(today){
     note = `${V.readings} readings in ${per}. ${ev.length ? "Changes: " + ev.join(" · ") + "." : "No change in this period."} Garmin updates VO2max after outdoor runs; this is its whole number.`;
   }
   if(V.clashDays) note += ` On ${V.clashDays} days the run files didn't match Garmin's own number, so this shows Garmin's whole number.`;
-  note += " Ticks along the bottom mark days with a reading.";
+  if(V.decReads>0) note += " Ticks along the bottom mark days read from a run file.";
   if(mode==="demo"){ if(decOn && DEMO && DEMO.vo2fitNote) note += " " + DEMO.vo2fitNote; }
   else if(!decOn) note += " Decimals are off in ⚙ Settings.";
   else if(vo2Job.running) note += ` Reading run files: ${vo2Job.done} of ${vo2Job.total}…`;
