@@ -286,10 +286,9 @@ input:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px}
         <div class="subhead">Last 12 weeks</div>
         <div class="stats" id="eStats" style="margin-top:10px"></div>
         <div class="readout" id="eRead" aria-live="polite"></div>
-        <svg class="chart" id="effChart" height="210" tabindex="0" role="img" aria-label="Weekly effort for 12 weeks with each week's range, the rolling 7-day total and a trend line. Use the left and right arrow keys to move through the days."></svg>
+        <svg class="chart" id="effChart" height="210" tabindex="0" role="img" aria-label="Weekly effort for 12 weeks as weekly bars, with the rolling 7-day total and a trend line. Use the left and right arrow keys to move through the days."></svg>
         <div class="legend">
           <span><i class="k-ebar"></i>Week total, faded while in progress</span>
-          <span><i class="k-band"></i>That week's range</span>
           <span><i class="k-eline"></i>Rolling 7 days</span>
           <span><i class="k-trend"></i>12-week trend</span>
         </div>
@@ -885,16 +884,11 @@ function drawEffort(F){
   const svg = $("effChart"), Wd = chartWidth(svg), H = 210, L = 34, Rm = 8, T = 14, B = 22;
   const pw = Wd-L-Rm, ph = H-T-B, slot = pw/84;
   svg.setAttribute("viewBox", `0 0 ${Wd} ${H}`);
-  const peak = Math.max(50, ...F.roll, ...F.weeks.map(w=>Math.max(w.e, w.range ? w.range.hi : 0)));
+  const peak = Math.max(50, ...F.roll, ...F.weeks.map(w=>w.e));
   const step = niceStep(peak*1.08), yMax = Math.ceil(peak*1.08/step)*step;
   const x = i => L+(i+.5)*slot, y = v => T+ph-(Math.max(0,v)/yMax)*ph;
   const sel = eSel!==null ? Math.min(eSel, F.n-1) : null, at = sel!==null ? sel : F.n-1;
   let s = gridY(L, pw, yMax, step, y);
-  F.weeks.forEach(w=>{
-    if(!w.range) return;
-    const cx = L+(7*w.k+3.5)*slot, bw = Math.min(32, 7*slot-1);
-    s += `<rect class="band" x="${(cx-bw/2).toFixed(1)}" y="${y(w.range.hi).toFixed(1)}" width="${bw.toFixed(1)}" height="${(y(w.range.lo)-y(w.range.hi)).toFixed(1)}" rx="3"/>`;
-  });
   F.weeks.forEach(w=>{
     if(w.e<=0) return;
     const cx = L+(7*w.k+3.5)*slot, bw = Math.min(22, 7*slot-6), x0 = cx-bw/2, x1 = cx+bw/2, yt = y(w.e), yb = y(0), r = Math.min(4, bw/2, yb-yt);
