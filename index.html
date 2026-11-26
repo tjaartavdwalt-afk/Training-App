@@ -22,6 +22,7 @@
   --ok:#34d27b;--watch:#f2c94c;--easy:#ff9f43;--rest:#ff5c6c;--none:#4a5468;--info:#7fa8d9;
   --viz-bar:#245b8a;--viz-bar-hi:#3a7fb8;--viz-line:#4cc3ff;--viz-vo2:#b597ff;--viz-trend:#8e98ab;--viz-grid:#1f2737;--viz-rug:#4a5468;
   --viz-eff:#f472b6;--viz-eff-bar:#7a2f5c;--viz-eff-hi:#a3457c;--viz-band:rgba(238,242,248,.07);--viz-band-edge:rgba(238,242,248,.18);
+  --viz-fit:#5b9bff;--viz-fat:#ff9f43;--z-fresh:rgba(91,155,255,.16);--z-neutral:rgba(142,152,171,.10);--z-prod:rgba(52,210,123,.15);--z-fatig:rgba(255,92,108,.20);
   --display:"Barlow Condensed","Roboto Condensed","Arial Narrow",system-ui,sans-serif;
   --text:"Barlow",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   --tabH:68px;
@@ -144,12 +145,17 @@ h2{font-family:var(--display);font-size:20px;font-weight:600;margin:0;letter-spa
 .k-eline{width:16px;height:2px;border-radius:1px;background:var(--viz-eff)}
 .k-band{width:14px;height:10px;border-radius:2px;background:var(--viz-band);box-shadow:inset 0 0 0 1px var(--viz-band-edge)}
 .k-last{width:16px;border-top:1.5px dashed var(--viz-trend)}
+.k-fit{width:16px;height:2px;border-radius:1px;background:var(--viz-fit)}.k-fat{width:16px;height:2px;border-radius:1px;background:var(--viz-fat)}
+.k-zf{width:12px;height:10px;border-radius:2px;background:var(--z-fresh)}.k-zn{width:12px;height:10px;border-radius:2px;background:var(--z-neutral)}
+.k-zp{width:12px;height:10px;border-radius:2px;background:var(--z-prod)}.k-zx{width:12px;height:10px;border-radius:2px;background:var(--z-fatig)}
 .ebar{fill:var(--viz-eff-bar)}
 .ebar.partial{opacity:.55}
 .ebar.on{fill:var(--viz-eff-hi);opacity:1}
 .eln{fill:none;stroke:var(--viz-eff);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
 .edot{fill:var(--viz-eff);stroke:var(--surface);stroke-width:2}
 .band{fill:var(--viz-band);stroke:var(--viz-band-edge);stroke-width:1}
+.zone{stroke:none}.z-fresh{fill:var(--z-fresh)}.z-neutral{fill:var(--z-neutral)}.z-prod{fill:var(--z-prod)}.z-fatig{fill:var(--z-fatig)}
+.ln.fit{stroke:var(--viz-fit)}.ln.fat{stroke:var(--viz-fat)}.dotm.fit{fill:var(--viz-fit)}.dotm.fat{fill:var(--viz-fat)}
 .lastwk{fill:none;stroke:var(--viz-trend);stroke-width:1.5;stroke-dasharray:4 4}
 .ax.today{fill:var(--ink);font-weight:700}
 .effnow{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;flex-wrap:wrap}
@@ -247,6 +253,37 @@ input:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px}
     </section>
 
     <div id="trendsBody">
+      <section class="card" id="pmcCard">
+        <div class="cardhead">
+          <div><h2>Fitness &amp; Form</h2><p class="sub">Fitness (CTL) and Fatigue (ATL) from Intervals.icu · Form is the gap</p></div>
+          <div class="seg2" role="group" aria-label="Fitness period">
+            <button id="pmc_14" aria-pressed="true">14 days</button>
+            <button id="pmc_84" aria-pressed="false">12 weeks</button>
+          </div>
+        </div>
+        <p class="empty" id="pmcEmpty" hidden>No Fitness/Fatigue data from Intervals.icu in this period.</p>
+        <div id="pmcBody">
+          <div class="effnow">
+            <div><div class="sl">Form today</div><div class="big"><span class="bv" id="pmcNow">—</span></div></div>
+            <span class="chip" id="pmcChip"></span>
+          </div>
+          <div class="bd" id="pmcSub"></div>
+          <div class="readout" id="pmcRead" aria-live="polite"></div>
+          <svg class="chart" id="pmcChart" height="210" tabindex="0" role="img" aria-label="Fitness and Fatigue as lines with Form zones shaded behind, over the selected period. Use the left and right arrow keys to move through the days."></svg>
+          <div class="legend">
+            <span><i class="k-fit"></i>Fitness (CTL)</span>
+            <span><i class="k-fat"></i>Fatigue (ATL)</span>
+          </div>
+          <div class="legend" style="margin-top:4px">
+            <span><i class="k-zf"></i>Fresh</span>
+            <span><i class="k-zn"></i>Neutral</span>
+            <span><i class="k-zp"></i>Productive</span>
+            <span><i class="k-zx"></i>High fatigue</span>
+          </div>
+          <p class="hint" style="margin-top:10px" id="pmcNote"></p>
+        </div>
+      </section>
+
       <section class="card" id="mileCard">
         <div class="cardhead"><div><h2>Running mileage</h2><p class="sub">Last 12 weeks · runs only (road, trail and treadmill)</p></div></div>
         <p class="empty" id="mileCover" hidden></p>
@@ -398,9 +435,10 @@ input:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px}
    Today: GO / EASY / REST each morning from the athlete's own rules.
    Trends: 12-week running mileage, weekly effort (TRIMP) and the Garmin VO2max estimate,
    with one decimal read from each run's original Garmin file (FIT message 140, field 7).
+   Fitness & Form (PMC): Fitness (CTL) and Fatigue (ATL) lines with Form (CTL-ATL) zones behind.
    Data: Intervals.icu API v1 (Garmin → Intervals.icu). Nothing leaves the phone except the requests to intervals.icu. */
 const DEMO = null;
-const VERSION = "1.4";
+const VERSION = "1.5";
 
 const DEF_RULES = {rhrEasy:48, rhrRest:50, sleepEasy:75, sleepTarget:80, formEasy:-20, formWatch:-10, hardMin:12, hardZone:3, load3:200, hrrLow:40, steadyPct:10, effLo:80, effHi:130, effWarn:150};
 const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
@@ -437,7 +475,8 @@ let R = Object.assign({}, DEF_RULES, store.get("rules", {}));
 let PLAN = store.get("plan", null) || DEF_PLAN.map(p=>({...p}));
 let data = null, mode = "none", lastError = "";
 let view = "today", vo2N = store.get("vo2N", 28) === 84 ? 84 : 28;
-let mSel = null, vSel = null, eSel = null, wSel = null, TR = null, daySel = null;   // chart selections, last trends model, selected day in the strip
+let mSel = null, vSel = null, eSel = null, wSel = null, pSel = null, TR = null, daySel = null;   // chart selections, last trends model, selected day in the strip
+let pmcN = store.get("pmcN", 14) === 84 ? 84 : 14;
 let VF = store.get("vo2fit", {}) || {};                                            // VO2max read from run files: activity id -> {d, s, v}
 let vo2Job = {running:false, done:0, total:0, left:0, err:""};
 
@@ -941,12 +980,79 @@ function renderEffort(F){
     + (F.noHR ? ` ${F.noHR} session${F.noHR>1?"s":""} without heart rate count${F.noHR>1?"":"s"} as zero.` : "");
 }
 
+/* ---------- Trends: Fitness & Form (PMC) ---------- */
+const sgnNum = v => { const r = Math.round(v); return (r>0?"+":r<0?"−":"±") + Math.abs(r); };
+function formZone(tsb){                                                    // Form (TSB) bands; red is the fatigue warning
+  if(tsb>=15)  return {k:"fresh",   t:"Fresh",        c:"var(--viz-fit)"};
+  if(tsb>=-10) return {k:"neutral", t:"Neutral",      c:"var(--viz-trend)"};
+  if(tsb>=-25) return {k:"prod",    t:"Productive",   c:"var(--ok)"};
+  return             {k:"fatig",   t:"High fatigue", c:"var(--rest)"};
+}
+function pmcModel(today, N){
+  const start = add(today,-(N-1)), pts = [];
+  for(let i=0;i<N;i++){ const d = add(start,i), w = W[d];
+    pts.push({d, ctl:w&&num(w.ctl)?w.ctl:null, atl:w&&num(w.atl)?w.atl:null}); }
+  let pc = null, pa = null;                                                // carry a value in from before the window
+  for(let k=1;k<=90;k++){ const w = W[add(start,-k)]; if(w&&num(w.ctl)&&num(w.atl)){ pc = w.ctl; pa = w.atl; break; } }
+  pts.forEach(p=>{ if(p.ctl==null) p.ctl = pc; else pc = p.ctl; if(p.atl==null) p.atl = pa; else pa = p.atl;
+    p.form = (num(p.ctl)&&num(p.atl)) ? p.ctl-p.atl : null; p.zone = num(p.form) ? formZone(p.form) : null; });
+  let lastIdx = -1; pts.forEach((p,i)=>{ if(num(p.ctl)) lastIdx = i; });
+  const have = pts.filter(p=>num(p.ctl));
+  const maxL = Math.max(10, ...have.map(p=>Math.max(p.ctl, p.atl)));
+  return {start, N, pts, maxL, lastIdx, has:have.length>0, now:lastIdx>=0?pts[lastIdx]:null, first:have.length?have[0]:null};
+}
+function drawPMC(P){
+  const svg = $("pmcChart"), Wd = chartWidth(svg), H = 210, L = 30, Rm = 12, T = 14, B = 22;
+  const pw = Wd-L-Rm, ph = H-T-B, N = P.N, slot = pw/N;
+  svg.setAttribute("viewBox", `0 0 ${Wd} ${H}`);
+  const step = niceStep(P.maxL*1.12), yMax = Math.ceil(P.maxL*1.12/step)*step;
+  const x = i => L+(i+.5)*slot, y = v => T+ph-(Math.max(0,v)/yMax)*ph;
+  const sel = pSel!==null ? Math.min(pSel, N-1) : null, at = sel!==null ? sel : (P.lastIdx>=0 ? P.lastIdx : N-1);
+  let s = "", i = 0;
+  while(i<N){ const z = P.pts[i].zone; if(!z){ i++; continue; }                 // merge adjacent same-zone days into one band
+    let j = i; while(j+1<N && P.pts[j+1].zone && P.pts[j+1].zone.k===z.k) j++;
+    s += `<rect class="zone z-${z.k}" x="${(L+i*slot).toFixed(1)}" y="${T}" width="${((j+1-i)*slot).toFixed(1)}" height="${ph}"/>`; i = j+1; }
+  s += gridY(L, pw, yMax, step, y);
+  const every = Math.max(1, Math.round(N/5));
+  for(let k=N-1;k>=0;k-=every){ const last = k===N-1;
+    s += `<text class="ax" x="${(last?L+pw:x(k)).toFixed(1)}" y="${H-6}" text-anchor="${last?"end":"middle"}">${dm(P.pts[k].d)}</text>`; }
+  const path = key => P.pts.map((p,idx)=>num(p[key]) ? ((idx&&num(P.pts[idx-1][key]))?"L":"M")+x(idx).toFixed(1)+" "+y(p[key]).toFixed(1) : "").join("");
+  s += `<path class="ln fat" d="${path("atl")}"/>`;
+  s += `<path class="ln fit" d="${path("ctl")}"/>`;
+  if(N<=16){ P.pts.forEach((p,idx)=>{ if(num(p.atl)) s += `<circle class="dotm fat" cx="${x(idx).toFixed(1)}" cy="${y(p.atl).toFixed(1)}" r="3"/>`;
+    if(num(p.ctl)) s += `<circle class="dotm fit" cx="${x(idx).toFixed(1)}" cy="${y(p.ctl).toFixed(1)}" r="3"/>`; }); }
+  else if(P.lastIdx>=0){ const li = P.lastIdx; s += `<circle class="dotm fat" cx="${x(li).toFixed(1)}" cy="${y(P.pts[li].atl).toFixed(1)}" r="4"/>`;
+    s += `<circle class="dotm fit" cx="${x(li).toFixed(1)}" cy="${y(P.pts[li].ctl).toFixed(1)}" r="4"/>`; }
+  if(sel!==null && num(P.pts[at].ctl)){ s += `<line class="xh" x1="${x(at).toFixed(1)}" x2="${x(at).toFixed(1)}" y1="${T}" y2="${T+ph}"/>`;
+    s += `<circle class="dotm fat" cx="${x(at).toFixed(1)}" cy="${y(P.pts[at].atl).toFixed(1)}" r="4"/>`;
+    s += `<circle class="dotm fit" cx="${x(at).toFixed(1)}" cy="${y(P.pts[at].ctl).toFixed(1)}" r="4"/>`; }
+  s += `<rect class="hit" x="${L}" y="${T}" width="${pw.toFixed(1)}" height="${ph}"/>`;
+  svg.innerHTML = s; svg._g = {Wd, L, slot, last:N-1};
+  const p = P.pts[at];
+  $("pmcRead").innerHTML = `<div class="rd">${at===P.lastIdx ? "Today, "+dayLabel(p.d) : dayLabel(p.d)}</div>`
+    + (num(p.ctl) ? `Fitness <b>${Math.round(p.ctl)}</b> · Fatigue <b>${Math.round(p.atl)}</b> · Form <b>${sgnNum(p.form)}</b> <span class="chip" style="--sc:${p.zone.c}">${p.zone.t}</span>` : "No data this day");
+}
+function renderPMC(P){
+  $("pmc_14").setAttribute("aria-pressed", String(pmcN===14)); $("pmc_84").setAttribute("aria-pressed", String(pmcN===84));
+  $("pmcEmpty").hidden = P.has; $("pmcBody").hidden = !P.has;
+  if(!P.has) return;
+  const now = P.now, z = formZone(now.form);
+  $("pmcNow").textContent = sgnNum(now.form);
+  const chip = $("pmcChip"); chip.textContent = z.t; chip.style.setProperty("--sc", z.c);
+  const span = pmcN===14 ? "14 days" : "12 weeks", dC = Math.round(now.ctl)-Math.round(P.first.ctl);
+  $("pmcSub").innerHTML = `Fitness <b>${Math.round(now.ctl)}</b> <span style="color:var(--muted)">(${sgn(dC)} over ${span})</span> · Fatigue <b>${Math.round(now.atl)}</b>`;
+  drawPMC(P);
+  $("pmcNote").textContent = "Fitness (CTL) is your 42-day training load, Fatigue (ATL) your 7-day. Form is Fitness minus Fatigue: positive when rested, negative when loaded. Zones: Fresh above +15, Neutral +15 to −10, Productive −10 to −25 (normal in a training block), High fatigue below −25. These are the end-of-day values; the Today screen uses the morning value before you train.";
+}
+
 /* ---------- Trends screen ---------- */
 function renderTrends(today){
   if(!data){ $("trendsConnect").hidden = false; $("trendsBody").hidden = true; return; }
   $("trendsConnect").hidden = true; $("trendsBody").hidden = false;
-  const M = mileageModel(today), V = vo2Model(today, vo2N), F = effortModel(today);
-  TR = {M, V, F};
+  const M = mileageModel(today), V = vo2Model(today, vo2N), F = effortModel(today), P = pmcModel(today, pmcN);
+  TR = {M, V, F, P};
+
+  renderPMC(P);
 
   // mileage
   const need = add(M.first,-6), cov = $("mileCover");
@@ -1023,12 +1129,14 @@ function setView(v, fromHash){
   const next = v==="trends" ? "trends" : "today";
   if(!fromHash){ try{ location.hash = next; }catch(e){} }
   if(next===view) return;
-  view = next; mSel = null; vSel = null; eSel = null; wSel = null;
+  view = next; mSel = null; vSel = null; eSel = null; wSel = null; pSel = null;
   applyView(); render(); window.scrollTo(0,0);
 }
 $("tabToday").onclick = ()=>setView("today");
 $("tabTrends").onclick = ()=>setView("trends");
 window.addEventListener("hashchange", ()=>setView(location.hash==="#trends" ? "trends" : "today", true));
+$("pmc_14").onclick = ()=>{ pmcN = 14; pSel = null; store.set("pmcN", 14); render(); };
+$("pmc_84").onclick = ()=>{ pmcN = 84; pSel = null; store.set("pmcN", 84); render(); };
 $("vo2_28").onclick = ()=>{ vo2N = 28; vSel = null; store.set("vo2N", 28); render(); };
 $("vo2_84").onclick = ()=>{ vo2N = 84; vSel = null; store.set("vo2N", 84); render(); setTimeout(loadVo2Fit, 0); };
 
@@ -1041,21 +1149,22 @@ function wireChart(id, which){
     if(which==="m"){ if(mSel===i) return; mSel = i; drawMileage(TR.M); }
     else if(which==="e"){ if(eSel===i) return; eSel = i; drawEffort(TR.F); }
     else if(which==="w"){ if(wSel===i) return; wSel = i; drawEffWeek(TR.F); }
+    else if(which==="p"){ if(pSel===i) return; pSel = i; drawPMC(TR.P); }
     else { if(vSel===i) return; vSel = i; drawVo2(TR.V); }
   };
   svg.addEventListener("pointerdown", ev=>{ const i = idxAt(ev); if(i!==null) set(i); });
   svg.addEventListener("pointermove", ev=>{ if(ev.pointerType==="mouse" || ev.buttons){ const i = idxAt(ev); if(i!==null) set(i); } });
   svg.addEventListener("pointerleave", ev=>{ if(ev.pointerType==="mouse") set(null); });
   svg.addEventListener("keydown", ev=>{
-    const g = svg._g; if(!g) return; const cur = which==="m" ? mSel : which==="e" ? eSel : which==="w" ? wSel : vSel; const c = cur===null ? g.last : cur;
+    const g = svg._g; if(!g) return; const cur = which==="m" ? mSel : which==="e" ? eSel : which==="w" ? wSel : which==="p" ? pSel : vSel; const c = cur===null ? g.last : cur;
     if(ev.key==="ArrowLeft"){ set(Math.max(0,c-1)); ev.preventDefault(); }
     else if(ev.key==="ArrowRight"){ set(Math.min(g.last,c+1)); ev.preventDefault(); }
     else if(ev.key==="Escape") set(null);
   });
 }
-wireChart("mileChart","m"); wireChart("vo2Chart","v"); wireChart("effChart","e"); wireChart("effWeek","w");
-let rsz; window.addEventListener("resize", ()=>{ clearTimeout(rsz); rsz = setTimeout(()=>{ if(view==="trends" && TR){ drawMileage(TR.M); if(TR.F){ drawEffort(TR.F); drawEffWeek(TR.F); } if(!$("vo2Body").hidden) drawVo2(TR.V); } }, 150); });
-if(document.fonts && document.fonts.ready) document.fonts.ready.then(()=>{ if(view==="trends" && TR){ drawMileage(TR.M); if(TR.F){ drawEffort(TR.F); drawEffWeek(TR.F); } if(!$("vo2Body").hidden) drawVo2(TR.V); } });
+wireChart("mileChart","m"); wireChart("vo2Chart","v"); wireChart("effChart","e"); wireChart("effWeek","w"); wireChart("pmcChart","p");
+let rsz; window.addEventListener("resize", ()=>{ clearTimeout(rsz); rsz = setTimeout(()=>{ if(view==="trends" && TR){ if(TR.P && TR.P.has) drawPMC(TR.P); drawMileage(TR.M); if(TR.F){ drawEffort(TR.F); drawEffWeek(TR.F); } if(!$("vo2Body").hidden) drawVo2(TR.V); } }, 150); });
+if(document.fonts && document.fonts.ready) document.fonts.ready.then(()=>{ if(view==="trends" && TR){ if(TR.P && TR.P.has) drawPMC(TR.P); drawMileage(TR.M); if(TR.F){ drawEffort(TR.F); drawEffWeek(TR.F); } if(!$("vo2Body").hidden) drawVo2(TR.V); } });
 
 /* ---------- VO2max decimals from each run's original Garmin file ---------- */
 // Garmin writes the post-run VO2max into an undocumented FIT message (140, field 7) as METs x 65536.
