@@ -162,6 +162,14 @@ h2{font-family:var(--display);font-size:20px;font-weight:600;margin:0;letter-spa
 .ceilw{fill:none;stroke:var(--watch);stroke-width:1.5;stroke-dasharray:5 4;opacity:.9}.ceils{fill:none;stroke:var(--rest);stroke-width:1.5;stroke-dasharray:5 4;opacity:.9}
 .seg-e{fill:var(--ok)}.seg-m{fill:var(--watch)}.seg-h{fill:var(--rest)}.ibar{transition:opacity .12s}.ibar.off{opacity:.45}
 .k-e{width:12px;height:10px;border-radius:2px;background:var(--ok)}.k-m{width:12px;height:10px;border-radius:2px;background:var(--watch)}.k-h{width:12px;height:10px;border-radius:2px;background:var(--rest)}
+.lf-row{display:grid;grid-template-columns:86px 52px 1fr;align-items:center;gap:10px;margin:16px 0}
+.lf-lbl{font-size:13px;color:var(--muted);font-weight:600;line-height:1.15}
+.lf-val{font-family:var(--display);font-size:22px;font-weight:700;text-align:right}
+.lf-track{position:relative;height:16px;background:var(--surface2);border-radius:8px}
+.lf-fill{position:absolute;left:0;top:0;height:100%;border-radius:8px;min-width:4px}
+.lf-fill.la{background:var(--accent)}.lf-fill.ha{background:var(--easy)}.lf-fill.an{background:var(--violet)}
+.lf-range{position:absolute;top:-3px;height:22px;border:1.5px dashed var(--faint);border-radius:7px}
+.lf-key{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--muted);margin-top:14px}.lf-key i{width:18px;height:0;border-top:1.5px dashed var(--faint)}
 .lastwk{fill:none;stroke:var(--viz-trend);stroke-width:1.5;stroke-dasharray:4 4}
 .ax.today{fill:var(--ink);font-weight:700}
 .effnow{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;flex-wrap:wrap}
@@ -364,6 +372,18 @@ input:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px}
         </div>
       </section>
 
+      <section class="card" id="lfCard">
+        <div class="cardhead"><div><h2>Load focus</h2><p class="sub">Last 4 weeks · your training load split by heart-rate zone</p></div></div>
+        <p class="empty" id="lfEmpty" hidden>Not enough heart-rate load in the last 4 weeks yet.</p>
+        <div id="lfBody">
+          <h3 class="lf-status" id="lfStatus" style="font-family:var(--display);font-size:24px;font-weight:700;margin:4px 0 2px"></h3>
+          <p class="sub" id="lfAdvice" style="margin:0 0 6px"></p>
+          <div id="lfRows"></div>
+          <div class="lf-key"><i></i>Target range (your guideline, not Garmin's)</div>
+          <p class="hint" style="margin-top:12px" id="lfNote"></p>
+        </div>
+      </section>
+
       <section class="card" id="effCard">
         <div class="cardhead"><div><h2>Weekly effort</h2><p class="sub">Heart-rate effort score from Intervals.icu (TRIMP) · all training</p></div></div>
         <p class="empty" id="effCover" hidden></p>
@@ -501,7 +521,7 @@ input:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px}
    Fitness & Form (PMC): Fitness (CTL) and Fatigue (ATL) lines with Form (CTL-ATL) zones behind.
    Data: Intervals.icu API v1 (Garmin → Intervals.icu). Nothing leaves the phone except the requests to intervals.icu. */
 const DEMO = null;
-const VERSION = "1.9";
+const VERSION = "2.0";
 
 const DEF_RULES = {rhrEasy:48, rhrRest:50, sleepEasy:75, sleepTarget:80, formEasy:-20, formWatch:-10, hardMin:12, hardZone:3, load3:200, hrrLow:40, steadyPct:10, effLo:80, effHi:130, effWarn:150, acwrWarn:1.3, acwrStop:1.5};
 const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
@@ -917,6 +937,46 @@ function renderIntensity(M){
   $("intNote").textContent = "Easy = your Intervals.icu HR zones 1–2 (below your aerobic ceiling), Moderate = zones 3–4 (tempo to threshold), Hard = zones 5+ (above threshold). The split is only as right as your Intervals threshold: set your LThr there to your tested value (166) so easy reflects your real ceiling (about 148), not a higher estimate. Sessions without heart rate aren't counted, so this time is usually a little under your total training time.";
 }
 
+const LF_TARGET = {la:[0.55,0.75], ha:[0.18,0.35], an:[0.04,0.12]};   // target share of 4-week load (guideline, editable later)
+function loadFocusModel(today){
+  const first = add(today,-27); let la=0, ha=0, an=0, unz=0;
+  for(let i=0;i<28;i++){ const d=add(first,i);
+    (A[d]||[]).forEach(a=>{ const L = num(a.load)?a.load:0; if(L<=0) return;
+      if(Array.isArray(a.z)){ const z=a.z, g=k=>num(z[k])?z[k]:0, e=g(0)+g(1), m=g(2)+g(3), h=g(4)+g(5)+g(6), tot=e+m+h;
+        if(tot>0){ la+=L*e/tot; ha+=L*m/tot; an+=L*h/tot; } else unz+=L; }
+      else unz+=L; });
+  }
+  const total = la+ha+an;
+  return {first, today, la:Math.round(la), ha:Math.round(ha), an:Math.round(an), unz:Math.round(unz), total, has:total>0};
+}
+function renderLoadFocus(M){
+  $("lfEmpty").hidden = M.has; $("lfBody").hidden = !M.has;
+  if(!M.has) return;
+  const T = M.total, share = v => v/T;
+  const rows = [
+    {k:"la", lbl:"Low aerobic", val:M.la, cls:"la"},
+    {k:"ha", lbl:"High aerobic", val:M.ha, cls:"ha"},
+    {k:"an", lbl:"Anaerobic", val:M.an, cls:"an"},
+  ];
+  const scale = Math.max(M.la, M.ha, M.an, ...rows.map(r=>LF_TARGET[r.k][1]*T)) * 1.1 || 1;
+  $("lfRows").innerHTML = rows.map(r=>{
+    const lo = LF_TARGET[r.k][0]*T, hi = LF_TARGET[r.k][1]*T;
+    const w = Math.max(2, r.val/scale*100), rl = lo/scale*100, rw = Math.max(1,(hi-lo)/scale*100);
+    return `<div class="lf-row"><div class="lf-lbl">${r.lbl}</div><div class="lf-val">${r.val}</div>`
+      + `<div class="lf-track"><div class="lf-fill ${r.cls}" style="width:${w.toFixed(1)}%"></div>`
+      + `<div class="lf-range" style="left:${rl.toFixed(1)}%;width:${rw.toFixed(1)}%"></div></div></div>`;
+  }).join("");
+  // status
+  let status = "Balanced", advice = "Your mix sits in a sensible range across easy, high-aerobic and anaerobic work.";
+  if(share(M.la) < LF_TARGET.la[0]){ status = "Low aerobic shortage"; advice = "Your easy aerobic load is light for the amount of harder work you are doing. Add easy runs below your aerobic ceiling (about 148) to balance it and aid recovery."; }
+  else if(share(M.an) < LF_TARGET.an[0]){ status = "Anaerobic shortage"; advice = "Little load above threshold. Fine in a base block; add short, sharp work (hills, strides, reps) when you move toward racing."; }
+  else if(share(M.ha) > LF_TARGET.ha[1]){ status = "High aerobic heavy"; advice = "Lots of load in the tempo-to-threshold band — common for steeplechase. Keep an eye on it and protect your easy days."; }
+  $("lfStatus").textContent = status;
+  $("lfAdvice").textContent = advice;
+  const pc = v => Math.round(share(v)*100);
+  $("lfNote").textContent = `Built from your Intervals.icu training load, split across your heart-rate zones: Low aerobic = Z1–2, High aerobic = Z3–4, Anaerobic = Z5+. This is the same idea as Garmin's Load Focus, not Garmin's own figures or ranges. Your split: Low ${pc(M.la)}%, High ${pc(M.ha)}%, Anaerobic ${pc(M.an)}%.` + (M.unz>0 ? ` ${M.unz} load from sessions without heart rate isn't shown.` : "");
+}
+
 function vo2Files(){ return store.get("vo2dec", true) ? (mode==="demo" ? ((DEMO && DEMO.vo2fit) || {}) : VF) : {}; }
 function vo2DecByDay(){                                                   // last run-file reading of each day
   const m = {};
@@ -1257,8 +1317,8 @@ function renderPMC(P){
 function renderTrends(today){
   if(!data){ $("trendsConnect").hidden = false; $("trendsBody").hidden = true; return; }
   $("trendsConnect").hidden = true; $("trendsBody").hidden = false;
-  const M = mileageModel(today), V = vo2Model(today, vo2N), F = effortModel(today), P = pmcModel(today, pmcN), TT = timeModel(today), IN = intensityModel(today);
-  TR = {M, V, F, P, TT, IN};
+  const M = mileageModel(today), V = vo2Model(today, vo2N), F = effortModel(today), P = pmcModel(today, pmcN), TT = timeModel(today), IN = intensityModel(today), LF = loadFocusModel(today);
+  TR = {M, V, F, P, TT, IN, LF};
 
   renderPMC(P);
 
@@ -1283,6 +1343,7 @@ function renderTrends(today){
 
   renderTime(TT);
   renderIntensity(IN);
+  renderLoadFocus(LF);
   renderEffort(F);
 
   // VO2max
