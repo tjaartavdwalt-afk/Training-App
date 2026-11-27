@@ -148,6 +148,8 @@ h2{font-family:var(--display);font-size:20px;font-weight:600;margin:0;letter-spa
 .k-fit{width:16px;height:2px;border-radius:1px;background:var(--viz-fit)}.k-fat{width:16px;height:2px;border-radius:1px;background:var(--viz-fat)}
 .k-zf{width:12px;height:10px;border-radius:2px;background:var(--z-fresh)}.k-zn{width:12px;height:10px;border-radius:2px;background:var(--z-neutral)}
 .k-zp{width:12px;height:10px;border-radius:2px;background:var(--z-prod)}.k-zx{width:12px;height:10px;border-radius:2px;background:var(--z-fatig)}
+.k-ceil{width:16px;border-top:1.5px dashed var(--rest)}
+.ff3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:4px}
 .ebar{fill:var(--viz-eff-bar)}
 .ebar.partial{opacity:.55}
 .ebar.on{fill:var(--viz-eff-hi);opacity:1}
@@ -156,6 +158,7 @@ h2{font-family:var(--display);font-size:20px;font-weight:600;margin:0;letter-spa
 .band{fill:var(--viz-band);stroke:var(--viz-band-edge);stroke-width:1}
 .zone{stroke:none}.z-fresh{fill:var(--z-fresh)}.z-neutral{fill:var(--z-neutral)}.z-prod{fill:var(--z-prod)}.z-fatig{fill:var(--z-fatig)}
 .ln.fit{stroke:var(--viz-fit)}.ln.fat{stroke:var(--viz-fat)}.dotm.fit{fill:var(--viz-fit)}.dotm.fat{fill:var(--viz-fat)}
+.ceil{fill:none;stroke:var(--rest);stroke-width:1.5;stroke-dasharray:5 4;opacity:.85}
 .lastwk{fill:none;stroke:var(--viz-trend);stroke-width:1.5;stroke-dasharray:4 4}
 .ax.today{fill:var(--ink);font-weight:700}
 .effnow{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;flex-wrap:wrap}
@@ -228,6 +231,15 @@ input:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px}
       <button class="btn" id="connectBtn" hidden>Connect Intervals.icu</button>
     </section>
 
+    <section class="card" id="ffCard" hidden>
+      <div class="cardhead"><div><h2>Fitness &amp; Fatigue</h2><p class="sub">This morning, from Intervals.icu</p></div></div>
+      <div class="ff3">
+        <div class="stat"><div class="sl">Fitness</div><div class="sv" id="ffFit">—</div><div class="ss">CTL · 42-day</div></div>
+        <div class="stat"><div class="sl">Fatigue</div><div class="sv" id="ffFat">—</div><div class="ss">ATL · 7-day</div></div>
+        <div class="stat"><div class="sl">Form</div><div class="sv" id="ffForm">—</div><div class="ss" id="ffZone">—</div></div>
+      </div>
+    </section>
+
     <section id="rulesCard">
       <h2 class="sec">Your morning rules</h2>
       <div class="tiles" id="rules"></div>
@@ -273,6 +285,7 @@ input:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px}
           <div class="legend">
             <span><i class="k-fit"></i>Fitness (CTL)</span>
             <span><i class="k-fat"></i>Fatigue (ATL)</span>
+            <span><i class="k-ceil"></i>Fatigue ceiling</span>
           </div>
           <div class="legend" style="margin-top:4px">
             <span><i class="k-zf"></i>Fresh</span>
@@ -438,7 +451,7 @@ input:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px}
    Fitness & Form (PMC): Fitness (CTL) and Fatigue (ATL) lines with Form (CTL-ATL) zones behind.
    Data: Intervals.icu API v1 (Garmin → Intervals.icu). Nothing leaves the phone except the requests to intervals.icu. */
 const DEMO = null;
-const VERSION = "1.5";
+const VERSION = "1.6";
 
 const DEF_RULES = {rhrEasy:48, rhrRest:50, sleepEasy:75, sleepTarget:80, formEasy:-20, formWatch:-10, hardMin:12, hardZone:3, load3:200, hrrLow:40, steadyPct:10, effLo:80, effHi:130, effWarn:150};
 const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
@@ -636,11 +649,15 @@ function renderToday(today){
     drawRing(["Resting HR","Sleep score","Form this morning","Yesterday","Load, last 3 days"].map((l,i)=>({label:l, ring:["RESTING HR","SLEEP","FORM","YESTERDAY","3-DAY LOAD"][i], st:"none", value:"no data"})), "HELLO", "NOT CONNECTED");
     $("vwhy").textContent = "Connect your Intervals.icu account once, and this screen will tell you every morning whether your own rules say GO, EASY or REST.";
     $("vplanWrap").hidden = true; $("connectBtn").hidden = false;
-    $("rulesCard").hidden = true; $("daysCard").hidden = true; $("banner").hidden = true;
+    $("rulesCard").hidden = true; $("daysCard").hidden = true; $("banner").hidden = true; $("ffCard").hidden = true;
     $("foot").textContent = "My Training " + VERSION;
     return;
   }
   $("vplanWrap").hidden = false; $("connectBtn").hidden = true; $("rulesCard").hidden = false; $("daysCard").hidden = false;
+  const mf = morningForm(today);
+  if(mf){ $("ffCard").hidden = false; $("ffFit").textContent = Math.round(mf.ctl); $("ffFat").textContent = Math.round(mf.atl);
+    $("ffForm").textContent = sgnNum(mf.tsb); const fz = formZone(mf.tsb); $("ffForm").style.color = fz.c; $("ffZone").textContent = fz.t; }
+  else $("ffCard").hidden = true;
 
   const e = evaluate(today);
   hero.className = "card hero " + e.verdict;
@@ -1005,7 +1022,9 @@ function drawPMC(P){
   const svg = $("pmcChart"), Wd = chartWidth(svg), H = 210, L = 30, Rm = 12, T = 14, B = 22;
   const pw = Wd-L-Rm, ph = H-T-B, N = P.N, slot = pw/N;
   svg.setAttribute("viewBox", `0 0 ${Wd} ${H}`);
-  const step = niceStep(P.maxL*1.12), yMax = Math.ceil(P.maxL*1.12/step)*step;
+  const CEIL = 25;                                                           // fatigue ceiling offset (Form −25)
+  const topV = Math.max(...P.pts.filter(pp=>num(pp.ctl)).map(pp=>Math.max(pp.atl, pp.ctl+CEIL)), 10)*1.06;
+  const step = niceStep(topV), yMax = Math.ceil(topV/step)*step;
   const x = i => L+(i+.5)*slot, y = v => T+ph-(Math.max(0,v)/yMax)*ph;
   const sel = pSel!==null ? Math.min(pSel, N-1) : null, at = sel!==null ? sel : (P.lastIdx>=0 ? P.lastIdx : N-1);
   let s = "", i = 0;
@@ -1013,6 +1032,8 @@ function drawPMC(P){
     let j = i; while(j+1<N && P.pts[j+1].zone && P.pts[j+1].zone.k===z.k) j++;
     s += `<rect class="zone z-${z.k}" x="${(L+i*slot).toFixed(1)}" y="${T}" width="${((j+1-i)*slot).toFixed(1)}" height="${ph}"/>`; i = j+1; }
   s += gridY(L, pw, yMax, step, y);
+  const cp = P.pts.map((pp,idx)=>num(pp.ctl) ? ((idx&&num(P.pts[idx-1].ctl))?"L":"M")+x(idx).toFixed(1)+" "+y(pp.ctl+CEIL).toFixed(1) : "").join("");
+  if(cp) s += `<path class="ceil" d="${cp}"/>`;
   const every = Math.max(1, Math.round(N/5));
   for(let k=N-1;k>=0;k-=every){ const last = k===N-1;
     s += `<text class="ax" x="${(last?L+pw:x(k)).toFixed(1)}" y="${H-6}" text-anchor="${last?"end":"middle"}">${dm(P.pts[k].d)}</text>`; }
@@ -1040,9 +1061,11 @@ function renderPMC(P){
   $("pmcNow").textContent = sgnNum(now.form);
   const chip = $("pmcChip"); chip.textContent = z.t; chip.style.setProperty("--sc", z.c);
   const span = pmcN===14 ? "14 days" : "12 weeks", dC = Math.round(now.ctl)-Math.round(P.first.ctl);
-  $("pmcSub").innerHTML = `Fitness <b>${Math.round(now.ctl)}</b> <span style="color:var(--muted)">(${sgn(dC)} over ${span})</span> · Fatigue <b>${Math.round(now.atl)}</b>`;
+  const head = 25 + now.form;                                              // room before the fatigue ceiling (Form −25)
+  const headTxt = head>0 ? `${Math.round(head)} before the fatigue ceiling` : `${Math.round(-head)} over the fatigue ceiling`;
+  $("pmcSub").innerHTML = `Fitness <b>${Math.round(now.ctl)}</b> <span style="color:var(--muted)">(${sgn(dC)} over ${span})</span> · Fatigue <b>${Math.round(now.atl)}</b> · <span style="color:${head>4?"var(--muted)":"var(--rest)"}">${headTxt}</span>`;
   drawPMC(P);
-  $("pmcNote").textContent = "Fitness (CTL) is your 42-day training load, Fatigue (ATL) your 7-day. Form is Fitness minus Fatigue: positive when rested, negative when loaded. Zones: Fresh above +15, Neutral +15 to −10, Productive −10 to −25 (normal in a training block), High fatigue below −25. These are the end-of-day values; the Today screen uses the morning value before you train.";
+  $("pmcNote").textContent = "Fitness (CTL) is your 42-day training load, Fatigue (ATL) your 7-day. Form is Fitness minus Fatigue: positive when rested, negative when loaded. The dashed line is the fatigue ceiling — Fatigue that far above Fitness (Form −25) is where injury and illness risk climbs; the goal is to keep the orange line under it. Zones: Fresh above +15, Neutral +15 to −10, Productive −10 to −25 (normal in a block), High fatigue below −25. These are end-of-day values; the Today screen uses the morning value before you train.";
 }
 
 /* ---------- Trends screen ---------- */
