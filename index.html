@@ -160,6 +160,8 @@ h2{font-family:var(--display);font-size:20px;font-weight:600;margin:0;letter-spa
 .zone{stroke:none}.z-fresh{fill:var(--z-fresh)}.z-neutral{fill:var(--z-neutral)}.z-prod{fill:var(--z-prod)}.z-fatig{fill:var(--z-fatig)}
 .ln.fit{stroke:var(--viz-fit)}.ln.fat{stroke:var(--viz-fat)}.dotm.fit{fill:var(--viz-fit)}.dotm.fat{fill:var(--viz-fat)}
 .ceilw{fill:none;stroke:var(--watch);stroke-width:1.5;stroke-dasharray:5 4;opacity:.9}.ceils{fill:none;stroke:var(--rest);stroke-width:1.5;stroke-dasharray:5 4;opacity:.9}
+.seg-e{fill:var(--ok)}.seg-m{fill:var(--watch)}.seg-h{fill:var(--rest)}.ibar{transition:opacity .12s}.ibar.off{opacity:.45}
+.k-e{width:12px;height:10px;border-radius:2px;background:var(--ok)}.k-m{width:12px;height:10px;border-radius:2px;background:var(--watch)}.k-h{width:12px;height:10px;border-radius:2px;background:var(--rest)}
 .lastwk{fill:none;stroke:var(--viz-trend);stroke-width:1.5;stroke-dasharray:4 4}
 .ax.today{fill:var(--ink);font-weight:700}
 .effnow{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;flex-wrap:wrap}
@@ -339,6 +341,29 @@ input:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px}
         </details>
       </section>
 
+      <section class="card" id="intCard">
+        <div class="cardhead"><div><h2>Intensity split</h2><p class="sub">Last 12 weeks · time in your heart-rate zones (easy / moderate / hard)</p></div></div>
+        <p class="empty" id="intEmpty" hidden>No heart-rate zone time yet. The app reads these from your Intervals.icu zones; sessions without heart rate (some swims) aren't counted.</p>
+        <div id="intBody">
+          <div class="stats" id="iStats"></div>
+          <div class="readout" id="iRead" aria-live="polite"></div>
+          <svg class="chart" id="intChart" height="210" tabindex="0" role="img" aria-label="Weekly training time split into easy, moderate and hard heart-rate zones for 12 weeks. Use the left and right arrow keys to move through the weeks."></svg>
+          <div class="legend">
+            <span><i class="k-e"></i>Easy (Z1–2)</span>
+            <span><i class="k-m"></i>Moderate (Z3–4)</span>
+            <span><i class="k-h"></i>Hard (Z5+)</span>
+          </div>
+          <details class="tbl">
+            <summary>Week by week</summary>
+            <div class="tablewrap"><table>
+              <thead><tr><th>Week</th><th>Easy</th><th>Mod</th><th>Hard</th><th>Time</th></tr></thead>
+              <tbody id="iTable"></tbody>
+            </table></div>
+          </details>
+          <p class="hint" style="margin-top:10px" id="intNote"></p>
+        </div>
+      </section>
+
       <section class="card" id="effCard">
         <div class="cardhead"><div><h2>Weekly effort</h2><p class="sub">Heart-rate effort score from Intervals.icu (TRIMP) · all training</p></div></div>
         <p class="empty" id="effCover" hidden></p>
@@ -476,7 +501,7 @@ input:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px}
    Fitness & Form (PMC): Fitness (CTL) and Fatigue (ATL) lines with Form (CTL-ATL) zones behind.
    Data: Intervals.icu API v1 (Garmin → Intervals.icu). Nothing leaves the phone except the requests to intervals.icu. */
 const DEMO = null;
-const VERSION = "1.8";
+const VERSION = "1.9";
 
 const DEF_RULES = {rhrEasy:48, rhrRest:50, sleepEasy:75, sleepTarget:80, formEasy:-20, formWatch:-10, hardMin:12, hardZone:3, load3:200, hrrLow:40, steadyPct:10, effLo:80, effHi:130, effWarn:150, acwrWarn:1.3, acwrStop:1.5};
 const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
@@ -513,7 +538,7 @@ let R = Object.assign({}, DEF_RULES, store.get("rules", {}));
 let PLAN = store.get("plan", null) || DEF_PLAN.map(p=>({...p}));
 let data = null, mode = "none", lastError = "";
 let view = "today", vo2N = store.get("vo2N", 28) === 84 ? 84 : 28;
-let mSel = null, vSel = null, eSel = null, wSel = null, pSel = null, ttSel = null, TR = null, daySel = null;   // chart selections, last trends model, selected day in the strip
+let mSel = null, vSel = null, eSel = null, wSel = null, pSel = null, ttSel = null, iSel = null, TR = null, daySel = null;   // chart selections, last trends model, selected day in the strip
 let pmcN = store.get("pmcN", 14) === 84 ? 84 : 14;
 let VF = store.get("vo2fit", {}) || {};                                            // VO2max read from run files: activity id -> {d, s, v}
 let vo2Job = {running:false, done:0, total:0, left:0, err:""};
@@ -829,6 +854,67 @@ function renderTime(M){
     const prev = arr[i+1], diff = prev && !w.partial ? w.hrs-prev.hrs : null;
     return `<tr><td>${dm(w.start)} – ${dm(w.end)}${w.partial?" (so far)":""}</td><td>${hm(w.hrs)}</td><td>${w.sess}</td><td>${diff===null ? "—" : sgnHm(diff)}</td></tr>`;
   }).join("");
+}
+
+const zOn = d => { const z=[0,0,0];                                       // [easy, moderate, hard] seconds that day, from Intervals HR zones
+  (A[d]||[]).forEach(a=>{ if(Array.isArray(a.z)){ const x=a.z; const g=i=>num(x[i])?x[i]:0;
+    z[0]+=g(0)+g(1); z[1]+=g(2)+g(3); z[2]+=g(4)+g(5)+g(6); } }); return z; };
+function intensityModel(today){
+  const curMon = add(today,-dowMon0(today)), first = add(curMon,-77);
+  const n = daysBetween(first,today)+1;
+  const weeks = Array.from({length:12},(_,k)=>{
+    const z=[0,0,0];
+    for(let j=0;j<7;j++){ const i=7*k+j; if(i>=n) break; const dz=zOn(add(first,i)); z[0]+=dz[0]; z[1]+=dz[1]; z[2]+=dz[2]; }
+    const start = add(first,7*k), tot = z[0]+z[1]+z[2];
+    return {k, start, end:add(start,6), e:z[0], m:z[1], h:z[2], tot, partial: 7*k+6>=n};
+  });
+  const done = weeks.slice(0,11).filter(w=>w.tot>0);
+  const avgEasyPct = done.length ? done.reduce((s,w)=>s+w.e/w.tot,0)/done.length*100 : null;
+  return {first, today, n, weeks, cur:weeks[11], avgEasyPct, hasData: weeks.some(w=>w.tot>0)};
+}
+function drawIntensity(M){
+  const svg = $("intChart"), Wd = chartWidth(svg), H = 210, L = 30, Rm = 8, T = 22, B = 22;
+  const pw = Wd-L-Rm, ph = H-T-B, slot = pw/84;
+  svg.setAttribute("viewBox", `0 0 ${Wd} ${H}`);
+  const peakH = Math.max(1, ...M.weeks.map(w=>w.tot/3600));
+  const step = niceStep(peakH*1.08), yMax = Math.ceil(peakH*1.08/step)*step;
+  const y = v => T+ph-(Math.max(0,v)/yMax)*ph;
+  const selW = iSel!==null ? Math.min(iSel,11) : null;
+  let s = "";
+  for(let v=0; v<=yMax+1e-9; v+=step){ const yy=y(v).toFixed(1);
+    s += `<line class="gl" x1="${L}" x2="${L+pw}" y1="${yy}" y2="${yy}"/><text class="ax" x="${L-6}" y="${(+yy+3.5).toFixed(1)}" text-anchor="end">${Math.round(v)}</text>`; }
+  s += `<text class="ax" x="${L-6}" y="10" text-anchor="end">h</text>`;
+  M.weeks.forEach(w=>{ if(w.tot<=0) return;
+    const cx = L+(7*w.k+3.5)*slot, bw = Math.min(24, 7*slot-4), x0 = cx-bw/2;
+    const on = selW!==null && selW===w.k, cls = selW!==null && !on ? " off" : "";
+    let yb = y(0);
+    [["seg-e",w.e],["seg-m",w.m],["seg-h",w.h]].forEach(([c,sec])=>{ if(sec<=0) return;
+      const hgt = (sec/3600)/yMax*ph, yt = yb-hgt;
+      s += `<rect class="ibar ${c}${cls}" x="${x0.toFixed(1)}" y="${yt.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0.6,hgt).toFixed(1)}"/>`; yb = yt; });
+  });
+  M.weeks.forEach(w=>{ if(w.k%2===0) s += `<text class="ax" x="${(L+(7*w.k+3.5)*slot).toFixed(1)}" y="${H-6}" text-anchor="middle">${dm(w.start)}</text>`; });
+  s += `<rect class="hit" x="${L}" y="${T}" width="${pw.toFixed(1)}" height="${ph}"/>`;
+  svg.innerHTML = s; svg._g = {Wd, L, slot, last:M.n-1};
+  const w = selW!==null ? M.weeks[selW] : M.cur, tot = w.tot||1;
+  const pct = x => Math.round(x/tot*100);
+  $("iRead").innerHTML = `<div class="rd">Week of ${dm(w.start)}${w.partial?" (so far)":""}</div>`
+    + (w.tot>0 ? `Easy <b>${pct(w.e)}%</b> · Moderate <b>${pct(w.m)}%</b> · Hard <b>${pct(w.h)}%</b> · <b>${hm(w.tot/3600)}</b> with heart rate` : "No heart-rate data this week");
+}
+function renderIntensity(M){
+  $("intEmpty").hidden = M.hasData; $("intBody").hidden = !M.hasData;
+  if(!M.hasData) return;
+  const c = M.cur, tot = c.tot||1, pct = x => Math.round(x/tot*100);
+  $("iStats").innerHTML =
+      `<div class="stat"><div class="sl">Easy</div><div class="sv" style="color:var(--ok)">${c.tot?pct(c.e)+"%":"—"}</div><div class="ss">this week · ${hm(c.e/3600)}</div></div>`
+    + `<div class="stat"><div class="sl">Moderate</div><div class="sv" style="color:var(--watch)">${c.tot?pct(c.m)+"%":"—"}</div><div class="ss">this week · ${hm(c.m/3600)}</div></div>`
+    + `<div class="stat"><div class="sl">Hard</div><div class="sv" style="color:var(--rest)">${c.tot?pct(c.h)+"%":"—"}</div><div class="ss">this week · ${hm(c.h/3600)}</div></div>`
+    + `<div class="stat"><div class="sl">Easy share</div><div class="sv">${M.avgEasyPct!==null?Math.round(M.avgEasyPct)+"%":"—"}</div><div class="ss">11-week average</div></div>`;
+  drawIntensity(M);
+  $("iTable").innerHTML = M.weeks.slice().reverse().map(w=>{
+    const p = x => w.tot? Math.round(x/w.tot*100)+"%" : "—";
+    return `<tr><td>${dm(w.start)} – ${dm(w.end)}${w.partial?" (so far)":""}</td><td>${p(w.e)}</td><td>${p(w.m)}</td><td>${p(w.h)}</td><td>${w.tot?hm(w.tot/3600):"—"}</td></tr>`;
+  }).join("");
+  $("intNote").textContent = "Easy = your Intervals.icu HR zones 1–2 (below your aerobic ceiling), Moderate = zones 3–4 (tempo to threshold), Hard = zones 5+ (above threshold). The split is only as right as your Intervals threshold: set your LThr there to your tested value (166) so easy reflects your real ceiling (about 148), not a higher estimate. Sessions without heart rate aren't counted, so this time is usually a little under your total training time.";
 }
 
 function vo2Files(){ return store.get("vo2dec", true) ? (mode==="demo" ? ((DEMO && DEMO.vo2fit) || {}) : VF) : {}; }
@@ -1171,8 +1257,8 @@ function renderPMC(P){
 function renderTrends(today){
   if(!data){ $("trendsConnect").hidden = false; $("trendsBody").hidden = true; return; }
   $("trendsConnect").hidden = true; $("trendsBody").hidden = false;
-  const M = mileageModel(today), V = vo2Model(today, vo2N), F = effortModel(today), P = pmcModel(today, pmcN), TT = timeModel(today);
-  TR = {M, V, F, P, TT};
+  const M = mileageModel(today), V = vo2Model(today, vo2N), F = effortModel(today), P = pmcModel(today, pmcN), TT = timeModel(today), IN = intensityModel(today);
+  TR = {M, V, F, P, TT, IN};
 
   renderPMC(P);
 
@@ -1196,6 +1282,7 @@ function renderTrends(today){
   }).join("");
 
   renderTime(TT);
+  renderIntensity(IN);
   renderEffort(F);
 
   // VO2max
@@ -1252,7 +1339,7 @@ function setView(v, fromHash){
   const next = v==="trends" ? "trends" : "today";
   if(!fromHash){ try{ location.hash = next; }catch(e){} }
   if(next===view) return;
-  view = next; mSel = null; vSel = null; eSel = null; wSel = null; pSel = null; ttSel = null;
+  view = next; mSel = null; vSel = null; eSel = null; wSel = null; pSel = null; ttSel = null; iSel = null;
   applyView(); render(); window.scrollTo(0,0);
 }
 $("tabToday").onclick = ()=>setView("today");
@@ -1271,6 +1358,7 @@ function wireChart(id, which){
     if(!TR) return;
     if(which==="m"){ if(mSel===i) return; mSel = i; drawMileage(TR.M); }
     else if(which==="t"){ if(ttSel===i) return; ttSel = i; drawTime(TR.TT); }
+    else if(which==="i"){ const wk=Math.floor(i/7); if(iSel===wk) return; iSel = wk; drawIntensity(TR.IN); }
     else if(which==="e"){ if(eSel===i) return; eSel = i; drawEffort(TR.F); }
     else if(which==="w"){ if(wSel===i) return; wSel = i; drawEffWeek(TR.F); }
     else if(which==="p"){ if(pSel===i) return; pSel = i; drawPMC(TR.P); }
@@ -1280,15 +1368,15 @@ function wireChart(id, which){
   svg.addEventListener("pointermove", ev=>{ if(ev.pointerType==="mouse" || ev.buttons){ const i = idxAt(ev); if(i!==null) set(i); } });
   svg.addEventListener("pointerleave", ev=>{ if(ev.pointerType==="mouse") set(null); });
   svg.addEventListener("keydown", ev=>{
-    const g = svg._g; if(!g) return; const cur = which==="m" ? mSel : which==="t" ? ttSel : which==="e" ? eSel : which==="w" ? wSel : which==="p" ? pSel : vSel; const c = cur===null ? g.last : cur;
+    const g = svg._g; if(!g) return; const cur = which==="m" ? mSel : which==="t" ? ttSel : which==="i" ? (iSel===null?null:iSel*7+3) : which==="e" ? eSel : which==="w" ? wSel : which==="p" ? pSel : vSel; const c = cur===null ? g.last : cur;
     if(ev.key==="ArrowLeft"){ set(Math.max(0,c-1)); ev.preventDefault(); }
     else if(ev.key==="ArrowRight"){ set(Math.min(g.last,c+1)); ev.preventDefault(); }
     else if(ev.key==="Escape") set(null);
   });
 }
-wireChart("mileChart","m"); wireChart("timeChart","t"); wireChart("vo2Chart","v"); wireChart("effChart","e"); wireChart("effWeek","w"); wireChart("pmcChart","p");
-let rsz; window.addEventListener("resize", ()=>{ clearTimeout(rsz); rsz = setTimeout(()=>{ if(view==="trends" && TR){ if(TR.P && TR.P.has) drawPMC(TR.P); drawMileage(TR.M); if(TR.TT) drawTime(TR.TT); if(TR.F){ drawEffort(TR.F); drawEffWeek(TR.F); } if(!$("vo2Body").hidden) drawVo2(TR.V); } }, 150); });
-if(document.fonts && document.fonts.ready) document.fonts.ready.then(()=>{ if(view==="trends" && TR){ if(TR.P && TR.P.has) drawPMC(TR.P); drawMileage(TR.M); if(TR.TT) drawTime(TR.TT); if(TR.F){ drawEffort(TR.F); drawEffWeek(TR.F); } if(!$("vo2Body").hidden) drawVo2(TR.V); } });
+wireChart("mileChart","m"); wireChart("timeChart","t"); wireChart("intChart","i"); wireChart("vo2Chart","v"); wireChart("effChart","e"); wireChart("effWeek","w"); wireChart("pmcChart","p");
+let rsz; window.addEventListener("resize", ()=>{ clearTimeout(rsz); rsz = setTimeout(()=>{ if(view==="trends" && TR){ if(TR.P && TR.P.has) drawPMC(TR.P); drawMileage(TR.M); if(TR.TT) drawTime(TR.TT); if(TR.IN && TR.IN.hasData) drawIntensity(TR.IN); if(TR.F){ drawEffort(TR.F); drawEffWeek(TR.F); } if(!$("vo2Body").hidden) drawVo2(TR.V); } }, 150); });
+if(document.fonts && document.fonts.ready) document.fonts.ready.then(()=>{ if(view==="trends" && TR){ if(TR.P && TR.P.has) drawPMC(TR.P); drawMileage(TR.M); if(TR.TT) drawTime(TR.TT); if(TR.IN && TR.IN.hasData) drawIntensity(TR.IN); if(TR.F){ drawEffort(TR.F); drawEffWeek(TR.F); } if(!$("vo2Body").hidden) drawVo2(TR.V); } });
 
 /* ---------- VO2max decimals from each run's original Garmin file ---------- */
 // Garmin writes the post-run VO2max into an undocumented FIT message (140, field 7) as METs x 65536.
