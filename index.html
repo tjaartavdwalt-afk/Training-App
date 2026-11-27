@@ -319,6 +319,26 @@ input:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px}
         </details>
       </section>
 
+      <section class="card" id="timeCard">
+        <div class="cardhead"><div><h2>Training time</h2><p class="sub">Last 12 weeks · hours per week · every activity (run, swim, all)</p></div></div>
+        <p class="empty" id="timeCover" hidden></p>
+        <div class="stats" id="tStats"></div>
+        <div class="readout" id="tRead" aria-live="polite"></div>
+        <svg class="chart" id="timeChart" height="210" tabindex="0" role="img" aria-label="Weekly training time in hours for 12 weeks, with the rolling 7-day total and a trend line. Use the left and right arrow keys to move through the days."></svg>
+        <div class="legend">
+          <span><i class="k-bar"></i>Week total (Mon–Sun), faded while in progress</span>
+          <span><i class="k-line"></i>Rolling 7 days</span>
+          <span><i class="k-trend"></i>12-week trend</span>
+        </div>
+        <details class="tbl">
+          <summary>Week by week</summary>
+          <div class="tablewrap"><table>
+            <thead><tr><th>Week</th><th>Time</th><th>Sessions</th><th>vs week before</th></tr></thead>
+            <tbody id="tTable"></tbody>
+          </table></div>
+        </details>
+      </section>
+
       <section class="card" id="effCard">
         <div class="cardhead"><div><h2>Weekly effort</h2><p class="sub">Heart-rate effort score from Intervals.icu (TRIMP) · all training</p></div></div>
         <p class="empty" id="effCover" hidden></p>
@@ -456,7 +476,7 @@ input:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px}
    Fitness & Form (PMC): Fitness (CTL) and Fatigue (ATL) lines with Form (CTL-ATL) zones behind.
    Data: Intervals.icu API v1 (Garmin → Intervals.icu). Nothing leaves the phone except the requests to intervals.icu. */
 const DEMO = null;
-const VERSION = "1.7";
+const VERSION = "1.8";
 
 const DEF_RULES = {rhrEasy:48, rhrRest:50, sleepEasy:75, sleepTarget:80, formEasy:-20, formWatch:-10, hardMin:12, hardZone:3, load3:200, hrrLow:40, steadyPct:10, effLo:80, effHi:130, effWarn:150, acwrWarn:1.3, acwrStop:1.5};
 const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
@@ -493,7 +513,7 @@ let R = Object.assign({}, DEF_RULES, store.get("rules", {}));
 let PLAN = store.get("plan", null) || DEF_PLAN.map(p=>({...p}));
 let data = null, mode = "none", lastError = "";
 let view = "today", vo2N = store.get("vo2N", 28) === 84 ? 84 : 28;
-let mSel = null, vSel = null, eSel = null, wSel = null, pSel = null, TR = null, daySel = null;   // chart selections, last trends model, selected day in the strip
+let mSel = null, vSel = null, eSel = null, wSel = null, pSel = null, ttSel = null, TR = null, daySel = null;   // chart selections, last trends model, selected day in the strip
 let pmcN = store.get("pmcN", 14) === 84 ? 84 : 14;
 let VF = store.get("vo2fit", {}) || {};                                            // VO2max read from run files: activity id -> {d, s, v}
 let vo2Job = {running:false, done:0, total:0, left:0, err:""};
@@ -737,6 +757,78 @@ function mileageModel(today){
   }
   const avgFull = weeks.slice(0,11).reduce((s,w)=>s+w.km,0)/11;
   return {first, today, n, roll, weeks, fit, avgFull, last7:roll[n-1], thisWeek:weeks[11].km};
+}
+
+const durHoursOn = d => (A[d]||[]).reduce((s,a)=>s+(num(a.mov)?a.mov:0),0)/3600;   // every activity's moving time, in hours
+const sessOn = d => (A[d]||[]).filter(a=>num(a.mov)&&a.mov>0).length;
+const hm = h => { if(!num(h)) return "—"; const m = Math.round(h*60); return m>=60 ? Math.floor(m/60)+"h "+String(m%60).padStart(2,"0")+"m" : m+"m"; };
+const sgnHm = d => (d>=0?"+":"−") + hm(Math.abs(d));
+function timeModel(today){
+  const curMon = add(today,-dowMon0(today)), first = add(curMon,-77);
+  const n = daysBetween(first,today)+1;
+  const daily = Array.from({length:n+6},(_,i)=>durHoursOn(add(first,i-6)));
+  const roll = Array.from({length:n},(_,i)=>{ let s=0; for(let j=0;j<7;j++) s+=daily[i+6-j]; return s; });
+  const weeks = Array.from({length:12},(_,k)=>{
+    let hrs=0, sess=0;
+    for(let j=0;j<7;j++){ const i=7*k+j; if(i>=n) break; hrs+=daily[i+6]; sess+=sessOn(add(first,i)); }
+    const start = add(first,7*k);
+    return {k, start, end:add(start,6), hrs, sess, partial: 7*k+6>=n};
+  });
+  let fit = null;
+  if(n>=14){
+    const mx=(n-1)/2, my=roll.reduce((s,v)=>s+v,0)/n; let sxx=0, sxy=0;
+    roll.forEach((v,i)=>{ sxx+=(i-mx)*(i-mx); sxy+=(i-mx)*(v-my); });
+    const b=sxy/sxx, a=my-b*mx, s=a, e=a+b*(n-1), pct = my>0 ? (e-s)/my*100 : 0;
+    fit = {s, e, mean:my, pct, label: my<=0 ? "none" : pct>=R.steadyPct ? "Rising" : pct<=-R.steadyPct ? "Falling" : "Steady"};
+  }
+  const avgFull = weeks.slice(0,11).reduce((s,w)=>s+w.hrs,0)/11;
+  return {first, today, n, roll, weeks, fit, avgFull, last7:roll[n-1], thisWeek:weeks[11].hrs};
+}
+function drawTime(M){
+  const svg = $("timeChart"), Wd = chartWidth(svg), H = 210, L = 30, Rm = 8, T = 22, B = 22;
+  const pw = Wd-L-Rm, ph = H-T-B, slot = pw/84;
+  svg.setAttribute("viewBox", `0 0 ${Wd} ${H}`);
+  const peak = Math.max(1, ...M.roll, ...M.weeks.map(w=>w.hrs));
+  const step = niceStep(peak*1.08), yMax = Math.ceil(peak*1.08/step)*step;
+  const x = i => L+(i+.5)*slot, y = v => T+ph-(Math.max(0,v)/yMax)*ph;
+  const sel = ttSel!==null ? Math.min(ttSel, M.n-1) : null, at = sel!==null ? sel : M.n-1;
+  let s = "";
+  for(let v=0; v<=yMax+1e-9; v+=step){ const yy = y(v).toFixed(1);
+    s += `<line class="gl" x1="${L}" x2="${L+pw}" y1="${yy}" y2="${yy}"/><text class="ax" x="${L-6}" y="${(+yy+3.5).toFixed(1)}" text-anchor="end">${Math.round(v)}</text>`; }
+  s += `<text class="ax" x="${L-6}" y="10" text-anchor="end">h</text>`;
+  M.weeks.forEach(w=>{ if(w.hrs<=0) return;
+    const cx = L+(7*w.k+3.5)*slot, bw = Math.min(24, 7*slot-4), x0 = cx-bw/2, x1 = cx+bw/2, yt = y(w.hrs), yb = y(0), r = Math.min(4, bw/2, yb-yt);
+    const on = sel!==null && Math.floor(sel/7)===w.k;
+    s += `<path class="bar${w.partial?" partial":""}${on?" on":""}" d="M${x0.toFixed(1)} ${yb.toFixed(1)}V${(yt+r).toFixed(1)}Q${x0.toFixed(1)} ${yt.toFixed(1)} ${(x0+r).toFixed(1)} ${yt.toFixed(1)}H${(x1-r).toFixed(1)}Q${x1.toFixed(1)} ${yt.toFixed(1)} ${x1.toFixed(1)} ${(yt+r).toFixed(1)}V${yb.toFixed(1)}Z"/>`; });
+  M.weeks.forEach(w=>{ if(w.k%2===0) s += `<text class="ax" x="${(L+(7*w.k+3.5)*slot).toFixed(1)}" y="${H-6}" text-anchor="middle">${dm(w.start)}</text>`; });
+  if(M.fit && M.fit.label!=="none") s += `<line class="tr" x1="${x(0).toFixed(1)}" y1="${y(M.fit.s).toFixed(1)}" x2="${x(M.n-1).toFixed(1)}" y2="${y(M.fit.e).toFixed(1)}"/>`;
+  s += `<path class="ln" d="${M.roll.map((v,i)=>(i?"L":"M")+x(i).toFixed(1)+" "+y(v).toFixed(1)).join("")}"/>`;
+  if(sel!==null) s += `<line class="xh" x1="${x(at).toFixed(1)}" x2="${x(at).toFixed(1)}" y1="${T}" y2="${T+ph}"/>`;
+  s += `<circle class="dotm" cx="${x(at).toFixed(1)}" cy="${y(M.roll[at]).toFixed(1)}" r="4"/>`;
+  if(sel===null) s += `<text class="endlbl" x="${(x(at)-8).toFixed(1)}" y="${(y(M.roll[at])-8).toFixed(1)}" text-anchor="end">${hm(M.roll[at])}</text>`;
+  s += `<rect class="hit" x="${L}" y="${T}" width="${pw.toFixed(1)}" height="${ph}"/>`;
+  svg.innerHTML = s; svg._g = {Wd, L, slot, last:M.n-1};
+  const d = add(M.first, at), w = M.weeks[Math.floor(at/7)];
+  $("tRead").innerHTML = `<div class="rd">${at===M.n-1 ? "Today, "+dayLabel(d) : dayLabel(d)}</div>`
+    + `7 days to ${dm(d)}: <b>${hm(M.roll[at])}</b> · Week of ${dm(w.start)}: <b>${hm(w.hrs)}</b>${w.partial ? " so far" : ""}`;
+}
+function renderTime(M){
+  const need = add(M.first,-6), cov = $("timeCover");
+  if(mode!=="demo" && (!data.oldest || data.oldest>need)){ cov.hidden = false;
+    cov.textContent = (data.oldest ? `Only data from ${dm(data.oldest)} is loaded so far.` : "Only the last 2 weeks are loaded so far.") + " Tap ↻ to load all 12 weeks.";
+  } else cov.hidden = true;
+  const vsAvg = M.avgFull>0 ? sgnPct((M.last7-M.avgFull)/M.avgFull*100)+" vs your average week" : "rolling, to today";
+  const f = M.fit, arrow = !f ? "" : Math.abs(f.e-f.s)<0.08 ? "→" : f.e>f.s ? "↗" : "↘";
+  $("tStats").innerHTML =
+      `<div class="stat"><div class="sl">Last 7 days</div><div class="sv">${hm(M.last7)}</div><div class="ss">${vsAvg}</div></div>`
+    + `<div class="stat"><div class="sl">This week</div><div class="sv">${hm(M.thisWeek)}</div><div class="ss">${M.weeks[11].partial ? "Monday to today" : "Monday to Sunday"}</div></div>`
+    + `<div class="stat"><div class="sl">Average week</div><div class="sv">${hm(M.avgFull)}</div><div class="ss">previous 11 weeks</div></div>`
+    + `<div class="stat"><div class="sl">12-week trend</div><div class="sv">${f && f.label!=="none" ? f.label : "—"}</div><div class="ss">${f && f.label!=="none" ? `${arrow} ${hm(f.s)} → ${hm(f.e)} a week` : "no training yet"}</div></div>`;
+  drawTime(M);
+  $("tTable").innerHTML = M.weeks.slice().reverse().map((w,i,arr)=>{
+    const prev = arr[i+1], diff = prev && !w.partial ? w.hrs-prev.hrs : null;
+    return `<tr><td>${dm(w.start)} – ${dm(w.end)}${w.partial?" (so far)":""}</td><td>${hm(w.hrs)}</td><td>${w.sess}</td><td>${diff===null ? "—" : sgnHm(diff)}</td></tr>`;
+  }).join("");
 }
 
 function vo2Files(){ return store.get("vo2dec", true) ? (mode==="demo" ? ((DEMO && DEMO.vo2fit) || {}) : VF) : {}; }
@@ -1079,8 +1171,8 @@ function renderPMC(P){
 function renderTrends(today){
   if(!data){ $("trendsConnect").hidden = false; $("trendsBody").hidden = true; return; }
   $("trendsConnect").hidden = true; $("trendsBody").hidden = false;
-  const M = mileageModel(today), V = vo2Model(today, vo2N), F = effortModel(today), P = pmcModel(today, pmcN);
-  TR = {M, V, F, P};
+  const M = mileageModel(today), V = vo2Model(today, vo2N), F = effortModel(today), P = pmcModel(today, pmcN), TT = timeModel(today);
+  TR = {M, V, F, P, TT};
 
   renderPMC(P);
 
@@ -1103,6 +1195,7 @@ function renderTrends(today){
     return `<tr><td>${dm(w.start)} – ${dm(w.end)}${w.partial?" (so far)":""}</td><td>${km1(w.km)}</td><td>${w.runDays}</td><td>${diff===null ? "—" : sgn(diff)}</td></tr>`;
   }).join("");
 
+  renderTime(TT);
   renderEffort(F);
 
   // VO2max
@@ -1159,7 +1252,7 @@ function setView(v, fromHash){
   const next = v==="trends" ? "trends" : "today";
   if(!fromHash){ try{ location.hash = next; }catch(e){} }
   if(next===view) return;
-  view = next; mSel = null; vSel = null; eSel = null; wSel = null; pSel = null;
+  view = next; mSel = null; vSel = null; eSel = null; wSel = null; pSel = null; ttSel = null;
   applyView(); render(); window.scrollTo(0,0);
 }
 $("tabToday").onclick = ()=>setView("today");
@@ -1177,6 +1270,7 @@ function wireChart(id, which){
   const set = i => {
     if(!TR) return;
     if(which==="m"){ if(mSel===i) return; mSel = i; drawMileage(TR.M); }
+    else if(which==="t"){ if(ttSel===i) return; ttSel = i; drawTime(TR.TT); }
     else if(which==="e"){ if(eSel===i) return; eSel = i; drawEffort(TR.F); }
     else if(which==="w"){ if(wSel===i) return; wSel = i; drawEffWeek(TR.F); }
     else if(which==="p"){ if(pSel===i) return; pSel = i; drawPMC(TR.P); }
@@ -1186,15 +1280,15 @@ function wireChart(id, which){
   svg.addEventListener("pointermove", ev=>{ if(ev.pointerType==="mouse" || ev.buttons){ const i = idxAt(ev); if(i!==null) set(i); } });
   svg.addEventListener("pointerleave", ev=>{ if(ev.pointerType==="mouse") set(null); });
   svg.addEventListener("keydown", ev=>{
-    const g = svg._g; if(!g) return; const cur = which==="m" ? mSel : which==="e" ? eSel : which==="w" ? wSel : which==="p" ? pSel : vSel; const c = cur===null ? g.last : cur;
+    const g = svg._g; if(!g) return; const cur = which==="m" ? mSel : which==="t" ? ttSel : which==="e" ? eSel : which==="w" ? wSel : which==="p" ? pSel : vSel; const c = cur===null ? g.last : cur;
     if(ev.key==="ArrowLeft"){ set(Math.max(0,c-1)); ev.preventDefault(); }
     else if(ev.key==="ArrowRight"){ set(Math.min(g.last,c+1)); ev.preventDefault(); }
     else if(ev.key==="Escape") set(null);
   });
 }
-wireChart("mileChart","m"); wireChart("vo2Chart","v"); wireChart("effChart","e"); wireChart("effWeek","w"); wireChart("pmcChart","p");
-let rsz; window.addEventListener("resize", ()=>{ clearTimeout(rsz); rsz = setTimeout(()=>{ if(view==="trends" && TR){ if(TR.P && TR.P.has) drawPMC(TR.P); drawMileage(TR.M); if(TR.F){ drawEffort(TR.F); drawEffWeek(TR.F); } if(!$("vo2Body").hidden) drawVo2(TR.V); } }, 150); });
-if(document.fonts && document.fonts.ready) document.fonts.ready.then(()=>{ if(view==="trends" && TR){ if(TR.P && TR.P.has) drawPMC(TR.P); drawMileage(TR.M); if(TR.F){ drawEffort(TR.F); drawEffWeek(TR.F); } if(!$("vo2Body").hidden) drawVo2(TR.V); } });
+wireChart("mileChart","m"); wireChart("timeChart","t"); wireChart("vo2Chart","v"); wireChart("effChart","e"); wireChart("effWeek","w"); wireChart("pmcChart","p");
+let rsz; window.addEventListener("resize", ()=>{ clearTimeout(rsz); rsz = setTimeout(()=>{ if(view==="trends" && TR){ if(TR.P && TR.P.has) drawPMC(TR.P); drawMileage(TR.M); if(TR.TT) drawTime(TR.TT); if(TR.F){ drawEffort(TR.F); drawEffWeek(TR.F); } if(!$("vo2Body").hidden) drawVo2(TR.V); } }, 150); });
+if(document.fonts && document.fonts.ready) document.fonts.ready.then(()=>{ if(view==="trends" && TR){ if(TR.P && TR.P.has) drawPMC(TR.P); drawMileage(TR.M); if(TR.TT) drawTime(TR.TT); if(TR.F){ drawEffort(TR.F); drawEffWeek(TR.F); } if(!$("vo2Body").hidden) drawVo2(TR.V); } });
 
 /* ---------- VO2max decimals from each run's original Garmin file ---------- */
 // Garmin writes the post-run VO2max into an undocumented FIT message (140, field 7) as METs x 65536.
