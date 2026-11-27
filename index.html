@@ -23,6 +23,7 @@
   --viz-bar:#245b8a;--viz-bar-hi:#3a7fb8;--viz-line:#4cc3ff;--viz-vo2:#b597ff;--viz-trend:#8e98ab;--viz-grid:#1f2737;--viz-rug:#4a5468;
   --viz-eff:#f472b6;--viz-eff-bar:#7a2f5c;--viz-eff-hi:#a3457c;--viz-band:rgba(238,242,248,.07);--viz-band-edge:rgba(238,242,248,.18);
   --viz-fit:#5b9bff;--viz-fat:#ff9f43;--z-fresh:rgba(91,155,255,.16);--z-neutral:rgba(142,152,171,.10);--z-prod:rgba(52,210,123,.15);--z-fatig:rgba(255,92,108,.20);
+  --grad:linear-gradient(100deg,#ff2d9b 0%,#a855f7 52%,#22d3ee 100%);
   --display:"Barlow Condensed","Roboto Condensed","Arial Narrow",system-ui,sans-serif;
   --text:"Barlow",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   --tabH:68px;
@@ -40,9 +41,9 @@ button:focus-visible,summary:focus-visible,.chart:focus-visible{outline:2px soli
 button:active{transform:scale(.97)}
 @media (prefers-reduced-motion:reduce){button:active{transform:none}.spin{animation:none!important}}
 
-.top{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;margin:6px 0 14px}
+.top{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;margin:6px 0 14px;padding-bottom:12px;border-bottom:1px solid var(--line);position:relative}.top::after{content:"";position:absolute;left:0;bottom:-1px;width:64px;height:2px;border-radius:2px;background:var(--grad)}
 .date{font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.08em;text-transform:uppercase}
-h1{font-family:var(--display);font-size:38px;font-weight:700;line-height:1;margin:4px 0 0;letter-spacing:.01em}
+h1{font-family:var(--display);font-size:38px;font-weight:700;line-height:1;margin:4px 0 0;letter-spacing:.01em;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;text-transform:uppercase}
 h2{font-family:var(--display);font-size:20px;font-weight:600;margin:0;letter-spacing:.02em}
 .actions{display:flex;gap:8px}
 .iconbtn{width:42px;height:42px;border-radius:50%;border:1px solid var(--line);background:var(--surface2);color:var(--ink);font-size:19px;cursor:pointer;transition:background .15s}
@@ -57,7 +58,7 @@ h2{font-family:var(--display);font-size:20px;font-weight:600;margin:0;letter-spa
 .cardhead{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px}
 .sub{font-size:12px;color:var(--muted);margin:3px 0 0;line-height:1.4}
 .hint{font-size:12px;color:var(--muted);line-height:1.45;margin:0}
-.sec{margin:20px 2px 10px}
+.sec{margin:20px 2px 10px;position:relative;padding-left:12px}.sec::before{content:"";position:absolute;left:0;top:50%;transform:translateY(-50%);width:4px;height:1em;border-radius:2px;background:var(--grad)}
 .btn{border:0;border-radius:999px;padding:12px 18px;font-weight:700;background:var(--accent);color:var(--accentInk);cursor:pointer}
 .btn.sec2{background:var(--surface2);color:var(--ink);border:1px solid var(--line)}
 
@@ -148,7 +149,7 @@ h2{font-family:var(--display);font-size:20px;font-weight:600;margin:0;letter-spa
 .k-fit{width:16px;height:2px;border-radius:1px;background:var(--viz-fit)}.k-fat{width:16px;height:2px;border-radius:1px;background:var(--viz-fat)}
 .k-zf{width:12px;height:10px;border-radius:2px;background:var(--z-fresh)}.k-zn{width:12px;height:10px;border-radius:2px;background:var(--z-neutral)}
 .k-zp{width:12px;height:10px;border-radius:2px;background:var(--z-prod)}.k-zx{width:12px;height:10px;border-radius:2px;background:var(--z-fatig)}
-.k-ceil{width:16px;border-top:1.5px dashed var(--rest)}
+.k-warn{width:16px;border-top:1.5px dashed var(--watch)}.k-stop{width:16px;border-top:1.5px dashed var(--rest)}
 .ff3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:4px}
 .ebar{fill:var(--viz-eff-bar)}
 .ebar.partial{opacity:.55}
@@ -158,7 +159,7 @@ h2{font-family:var(--display);font-size:20px;font-weight:600;margin:0;letter-spa
 .band{fill:var(--viz-band);stroke:var(--viz-band-edge);stroke-width:1}
 .zone{stroke:none}.z-fresh{fill:var(--z-fresh)}.z-neutral{fill:var(--z-neutral)}.z-prod{fill:var(--z-prod)}.z-fatig{fill:var(--z-fatig)}
 .ln.fit{stroke:var(--viz-fit)}.ln.fat{stroke:var(--viz-fat)}.dotm.fit{fill:var(--viz-fit)}.dotm.fat{fill:var(--viz-fat)}
-.ceil{fill:none;stroke:var(--rest);stroke-width:1.5;stroke-dasharray:5 4;opacity:.85}
+.ceilw{fill:none;stroke:var(--watch);stroke-width:1.5;stroke-dasharray:5 4;opacity:.9}.ceils{fill:none;stroke:var(--rest);stroke-width:1.5;stroke-dasharray:5 4;opacity:.9}
 .lastwk{fill:none;stroke:var(--viz-trend);stroke-width:1.5;stroke-dasharray:4 4}
 .ax.today{fill:var(--ink);font-weight:700}
 .effnow{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;flex-wrap:wrap}
@@ -168,7 +169,7 @@ h2{font-family:var(--display);font-size:20px;font-weight:600;margin:0;letter-spa
 .subhead{font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin:18px 0 0;padding-top:14px;border-top:1px solid var(--line)}
 .seg2{display:inline-flex;flex:none;background:var(--surface2);border:1px solid var(--line);border-radius:999px;padding:3px}
 .seg2 button{border:0;background:none;color:var(--muted);font-size:12px;font-weight:700;padding:6px 11px;border-radius:999px;cursor:pointer}
-.seg2 button[aria-pressed="true"]{background:var(--violet);color:#160c2a}
+.seg2 button[aria-pressed="true"]{background:var(--grad);color:#0a0e16}
 .big{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}
 .bv{font-family:var(--display);font-size:52px;font-weight:700;line-height:1;color:var(--ink)}
 .bu{font-size:13px;color:var(--muted);font-weight:700}
@@ -192,7 +193,7 @@ th{color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.05em;text-t
 .tab .ic{display:grid;place-items:center;width:52px;height:30px;border-radius:999px;transition:background .15s}
 .tab svg{width:22px;height:22px}
 .tab[aria-current="page"]{color:var(--ink)}
-.tab[aria-current="page"] .ic{background:color-mix(in srgb, var(--accent) 18%, transparent);color:var(--accent)}
+.tab[aria-current="page"] .ic{background:var(--grad);color:#0a0e16}
 
 /* settings sheet */
 .sheet{position:fixed;inset:0;background:var(--bg);overflow:auto;z-index:10;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -285,7 +286,8 @@ input:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px}
           <div class="legend">
             <span><i class="k-fit"></i>Fitness (CTL)</span>
             <span><i class="k-fat"></i>Fatigue (ATL)</span>
-            <span><i class="k-ceil"></i>Fatigue ceiling</span>
+            <span><i class="k-warn"></i>Caution</span>
+            <span><i class="k-stop"></i>Danger</span>
           </div>
           <div class="legend" style="margin-top:4px">
             <span><i class="k-zf"></i>Fresh</span>
@@ -426,10 +428,13 @@ input:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px}
         <div class="field"><label for="r_effLo">Effort range: low, % of 3-week average</label><input id="r_effLo" type="number" inputmode="numeric"></div>
         <div class="field"><label for="r_effHi">Effort range: high, %</label><input id="r_effHi" type="number" inputmode="numeric"></div>
         <div class="field"><label for="r_effWarn">Effort: well above at %</label><input id="r_effWarn" type="number" inputmode="numeric"></div>
+        <div class="field"><label for="r_acwrWarn">Fatigue caution: ratio of Fitness</label><input id="r_acwrWarn" type="number" inputmode="decimal" step="0.05"></div>
+        <div class="field"><label for="r_acwrStop">Fatigue danger: ratio of Fitness</label><input id="r_acwrStop" type="number" inputmode="decimal" step="0.05"></div>
       </div>
       <label class="check"><input type="checkbox" id="vo2dec"> VO2max with one decimal, from each run's Garmin file</label>
       <p class="note">The 12-week trend line is fitted to your rolling 7-day total. If it changes by less than this share of your average week, the trend shows as steady. The same applies to the effort trend. Your weekly effort range comes from your average over the previous 3 full weeks. These are your own heuristics, not medical limits.</p>
       <p class="note">VO2max decimals: the app downloads each outdoor run's original file from Intervals.icu once (about 0.3 MB per run, only for the period you are viewing) and keeps just the number.</p>
+      <p class="note">Fatigue lines: your 7-day load (Fatigue) divided by your 42-day load (Fitness) is the acute:chronic workload ratio. The research sweet spot is about 0.8–1.3; caution from 1.3 and danger from 1.5, where injury and illness risk climbs. It is a useful warning light, not a hard law.</p>
     </section>
 
     <section class="card">
@@ -451,9 +456,9 @@ input:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px}
    Fitness & Form (PMC): Fitness (CTL) and Fatigue (ATL) lines with Form (CTL-ATL) zones behind.
    Data: Intervals.icu API v1 (Garmin → Intervals.icu). Nothing leaves the phone except the requests to intervals.icu. */
 const DEMO = null;
-const VERSION = "1.6";
+const VERSION = "1.7";
 
-const DEF_RULES = {rhrEasy:48, rhrRest:50, sleepEasy:75, sleepTarget:80, formEasy:-20, formWatch:-10, hardMin:12, hardZone:3, load3:200, hrrLow:40, steadyPct:10, effLo:80, effHi:130, effWarn:150};
+const DEF_RULES = {rhrEasy:48, rhrRest:50, sleepEasy:75, sleepTarget:80, formEasy:-20, formWatch:-10, hardMin:12, hardZone:3, load3:200, hrrLow:40, steadyPct:10, effLo:80, effHi:130, effWarn:150, acwrWarn:1.3, acwrStop:1.5};
 const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 const DAYS_LONG = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
 const DEF_PLAN = [
@@ -999,6 +1004,8 @@ function renderEffort(F){
 
 /* ---------- Trends: Fitness & Form (PMC) ---------- */
 const sgnNum = v => { const r = Math.round(v); return (r>0?"+":r<0?"−":"±") + Math.abs(r); };
+function acwr(p){ return (num(p.ctl)&&p.ctl>0&&num(p.atl)) ? p.atl/p.ctl : 0; }
+function acwrTxt(p){ const r = acwr(p); return r>=R.acwrStop ? "danger zone" : r>=R.acwrWarn ? "caution" : r>=0.8 ? "in the sweet spot" : "low"; }
 function formZone(tsb){                                                    // Form (TSB) bands; red is the fatigue warning
   if(tsb>=15)  return {k:"fresh",   t:"Fresh",        c:"var(--viz-fit)"};
   if(tsb>=-10) return {k:"neutral", t:"Neutral",      c:"var(--viz-trend)"};
@@ -1022,8 +1029,8 @@ function drawPMC(P){
   const svg = $("pmcChart"), Wd = chartWidth(svg), H = 210, L = 30, Rm = 12, T = 14, B = 22;
   const pw = Wd-L-Rm, ph = H-T-B, N = P.N, slot = pw/N;
   svg.setAttribute("viewBox", `0 0 ${Wd} ${H}`);
-  const CEIL = 25;                                                           // fatigue ceiling offset (Form −25)
-  const topV = Math.max(...P.pts.filter(pp=>num(pp.ctl)).map(pp=>Math.max(pp.atl, pp.ctl+CEIL)), 10)*1.06;
+  const WARN = R.acwrWarn, STOP = R.acwrStop;                                // acute:chronic workload ratio tiers
+  const topV = Math.max(...P.pts.filter(pp=>num(pp.ctl)).map(pp=>Math.max(pp.atl, pp.ctl*STOP)), 10)*1.05;
   const step = niceStep(topV), yMax = Math.ceil(topV/step)*step;
   const x = i => L+(i+.5)*slot, y = v => T+ph-(Math.max(0,v)/yMax)*ph;
   const sel = pSel!==null ? Math.min(pSel, N-1) : null, at = sel!==null ? sel : (P.lastIdx>=0 ? P.lastIdx : N-1);
@@ -1032,8 +1039,9 @@ function drawPMC(P){
     let j = i; while(j+1<N && P.pts[j+1].zone && P.pts[j+1].zone.k===z.k) j++;
     s += `<rect class="zone z-${z.k}" x="${(L+i*slot).toFixed(1)}" y="${T}" width="${((j+1-i)*slot).toFixed(1)}" height="${ph}"/>`; i = j+1; }
   s += gridY(L, pw, yMax, step, y);
-  const cp = P.pts.map((pp,idx)=>num(pp.ctl) ? ((idx&&num(P.pts[idx-1].ctl))?"L":"M")+x(idx).toFixed(1)+" "+y(pp.ctl+CEIL).toFixed(1) : "").join("");
-  if(cp) s += `<path class="ceil" d="${cp}"/>`;
+  const ceilPath = m => P.pts.map((pp,idx)=>num(pp.ctl) ? ((idx&&num(P.pts[idx-1].ctl))?"L":"M")+x(idx).toFixed(1)+" "+y(pp.ctl*m).toFixed(1) : "").join("");
+  s += `<path class="ceilw" d="${ceilPath(WARN)}"/>`;
+  s += `<path class="ceils" d="${ceilPath(STOP)}"/>`;
   const every = Math.max(1, Math.round(N/5));
   for(let k=N-1;k>=0;k-=every){ const last = k===N-1;
     s += `<text class="ax" x="${(last?L+pw:x(k)).toFixed(1)}" y="${H-6}" text-anchor="${last?"end":"middle"}">${dm(P.pts[k].d)}</text>`; }
@@ -1051,7 +1059,7 @@ function drawPMC(P){
   svg.innerHTML = s; svg._g = {Wd, L, slot, last:N-1};
   const p = P.pts[at];
   $("pmcRead").innerHTML = `<div class="rd">${at===P.lastIdx ? "Today, "+dayLabel(p.d) : dayLabel(p.d)}</div>`
-    + (num(p.ctl) ? `Fitness <b>${Math.round(p.ctl)}</b> · Fatigue <b>${Math.round(p.atl)}</b> · Form <b>${sgnNum(p.form)}</b> <span class="chip" style="--sc:${p.zone.c}">${p.zone.t}</span>` : "No data this day");
+    + (num(p.ctl) ? `Fitness <b>${Math.round(p.ctl)}</b> · Fatigue <b>${Math.round(p.atl)}</b> · Form <b>${sgnNum(p.form)}</b> <span class="chip" style="--sc:${p.zone.c}">${p.zone.t}</span><br><span style="color:var(--muted)">Load ratio ${acwr(p).toFixed(2)} — ${acwrTxt(p)}</span>` : "No data this day");
 }
 function renderPMC(P){
   $("pmc_14").setAttribute("aria-pressed", String(pmcN===14)); $("pmc_84").setAttribute("aria-pressed", String(pmcN===84));
@@ -1061,11 +1069,10 @@ function renderPMC(P){
   $("pmcNow").textContent = sgnNum(now.form);
   const chip = $("pmcChip"); chip.textContent = z.t; chip.style.setProperty("--sc", z.c);
   const span = pmcN===14 ? "14 days" : "12 weeks", dC = Math.round(now.ctl)-Math.round(P.first.ctl);
-  const head = 25 + now.form;                                              // room before the fatigue ceiling (Form −25)
-  const headTxt = head>0 ? `${Math.round(head)} before the fatigue ceiling` : `${Math.round(-head)} over the fatigue ceiling`;
-  $("pmcSub").innerHTML = `Fitness <b>${Math.round(now.ctl)}</b> <span style="color:var(--muted)">(${sgn(dC)} over ${span})</span> · Fatigue <b>${Math.round(now.atl)}</b> · <span style="color:${head>4?"var(--muted)":"var(--rest)"}">${headTxt}</span>`;
+  const r = acwr(now), rc = r>=R.acwrStop ? "var(--rest)" : r>=R.acwrWarn ? "var(--watch)" : "var(--muted)";
+  $("pmcSub").innerHTML = `Fitness <b>${Math.round(now.ctl)}</b> <span style="color:var(--muted)">(${sgn(dC)} over ${span})</span> · Fatigue <b>${Math.round(now.atl)}</b> · <span style="color:${rc}">load ratio ${r.toFixed(2)}, ${acwrTxt(now)}</span>`;
   drawPMC(P);
-  $("pmcNote").textContent = "Fitness (CTL) is your 42-day training load, Fatigue (ATL) your 7-day. Form is Fitness minus Fatigue: positive when rested, negative when loaded. The dashed line is the fatigue ceiling — Fatigue that far above Fitness (Form −25) is where injury and illness risk climbs; the goal is to keep the orange line under it. Zones: Fresh above +15, Neutral +15 to −10, Productive −10 to −25 (normal in a block), High fatigue below −25. These are end-of-day values; the Today screen uses the morning value before you train.";
+  $("pmcNote").textContent = `Fitness (CTL) is your 42-day load, Fatigue (ATL) your 7-day. The two dashed lines are the acute:chronic workload ratio — Fatigue ÷ Fitness. Yellow at ${R.acwrWarn.toFixed(2)}× is caution, red at ${R.acwrStop.toFixed(2)}× is the danger zone where injury and illness risk climbs; keep the orange Fatigue line under them. Research sweet spot is about 0.8–1.3; it is a warning light, not a hard law (ACWR is debated). The background zones show freshness (Form). End-of-day values; the Today screen uses the morning value. Tune the ratios in Settings.`;
 }
 
 /* ---------- Trends screen ---------- */
@@ -1339,6 +1346,7 @@ function saveRulesAndPlan(){
   R.hardZone = Math.min(7, Math.max(1, Math.round(R.hardZone)));
   R.steadyPct = Math.min(50, Math.max(1, R.steadyPct));
   R.effLo = Math.min(100, Math.max(10, R.effLo)); R.effHi = Math.max(R.effLo+5, R.effHi); R.effWarn = Math.max(R.effHi, R.effWarn);
+  R.acwrWarn = Math.min(1.9, Math.max(1.05, R.acwrWarn)); R.acwrStop = Math.min(2.5, Math.max(R.acwrWarn+0.05, R.acwrStop));
   PLAN = PLAN.map((p,i)=>({t:$("pt"+i).value.trim()||p.t, k:$("pk"+i).value}));
   const decWas = store.get("vo2dec", true), decNow = $("vo2dec").checked; store.set("vo2dec", decNow);
   if(decNow && !decWas) setTimeout(loadVo2Fit, 0);
