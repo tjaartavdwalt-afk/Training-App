@@ -73,7 +73,6 @@ h2{font-family:var(--display);font-size:20px;font-weight:600;margin:0;letter-spa
 .vword{font-family:var(--display);font-weight:700;font-size:50px;fill:var(--vc);letter-spacing:.02em}
 .vcap{fill:var(--muted);font-family:var(--display);font-size:11px;font-weight:600;letter-spacing:.12em}
 .vwhy{font-size:14px;line-height:1.45;margin:4px auto 0;max-width:34ch;color:var(--ink)}
-.vplan{margin-top:14px;padding:12px 14px;border-radius:16px;background:var(--surface2);text-align:left}
 .lbl{font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.08em;text-transform:uppercase}
 .pl{font-size:13px;color:var(--muted);margin-top:3px;line-height:1.4}
 .vadvice{font-family:var(--display);font-size:21px;font-weight:600;line-height:1.2;margin-top:6px}
@@ -213,8 +212,6 @@ th{color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.05em;text-t
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 input,select{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:12px;font:inherit;font-size:16px;background:var(--surface2);color:var(--ink)}
 input:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px}
-.planrow{display:grid;grid-template-columns:40px 1fr 104px;gap:8px;align-items:center;margin-top:8px}
-.planrow b{font-family:var(--display);font-size:16px;font-weight:600}
 .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
 .msg{font-size:13px;margin-top:8px;color:var(--muted)}
 .note{font-size:12px;color:var(--muted);line-height:1.5;margin-top:8px}
@@ -238,7 +235,6 @@ input:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px}
     <section class="card hero" id="verdict">
       <svg class="ring" id="ring" viewBox="0 0 300 236" role="img" aria-label="Morning check"></svg>
       <p class="vwhy" id="vwhy"></p>
-      <div class="vplan" id="vplanWrap"><div class="lbl" id="vplan"></div><div class="pl" id="vplanT"></div><div class="vadvice" id="vadvice"></div></div>
       <button class="btn" id="connectBtn" hidden>Connect Intervals.icu</button>
     </section>
 
@@ -502,12 +498,7 @@ input:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px}
       <p class="note">Fatigue lines: your 7-day load (Fatigue) divided by your 42-day load (Fitness) is the acute:chronic workload ratio. The research sweet spot is about 0.8–1.3; caution from 1.3 and danger from 1.5, where injury and illness risk climbs. It is a useful warning light, not a hard law.</p>
     </section>
 
-    <section class="card">
-      <h2>Weekly plan</h2>
-      <div id="planRows"></div>
-    </section>
-
-    <div class="row"><button class="btn" id="saveAll">Save</button><button class="btn sec2" id="resetAll">Reset rules &amp; plan</button></div>
+    <div class="row"><button class="btn" id="saveAll">Save</button><button class="btn sec2" id="resetAll">Reset rules</button></div>
     <p class="note" id="ver"></p>
   </div>
 </div>
@@ -521,20 +512,11 @@ input:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px}
    Fitness & Form (PMC): Fitness (CTL) and Fatigue (ATL) lines with Form (CTL-ATL) zones behind.
    Data: Intervals.icu API v1 (Garmin → Intervals.icu). Nothing leaves the phone except the requests to intervals.icu. */
 const DEMO = null;
-const VERSION = "2.0";
+const VERSION = "2.1";
 
 const DEF_RULES = {rhrEasy:48, rhrRest:50, sleepEasy:75, sleepTarget:80, formEasy:-20, formWatch:-10, hardMin:12, hardZone:3, load3:200, hrrLow:40, steadyPct:10, effLo:80, effHi:130, effWarn:150, acwrWarn:1.3, acwrStop:1.5};
 const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 const DAYS_LONG = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
-const DEF_PLAN = [
-  {t:"Rest", k:"rest"},
-  {t:"Quality session", k:"quality"},
-  {t:"Easy run + strides (6–8 km, HR below 135)", k:"easy"},
-  {t:"Hill sprints", k:"quality"},
-  {t:"Easy run or 8 km aerobic fartlek", k:"easy"},
-  {t:"Long intervals", k:"quality"},
-  {t:"Swim", k:"easy"}
-];
 const MON = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const MON3 = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const LONG_DAYS = 112, SHORT_DAYS = 16;   // how far back to load: everything once a day, the last 16 days on other refreshes
@@ -555,7 +537,6 @@ const store = {
   del(k){ try{ localStorage.removeItem("mt."+k); }catch(e){} }
 };
 let R = Object.assign({}, DEF_RULES, store.get("rules", {}));
-let PLAN = store.get("plan", null) || DEF_PLAN.map(p=>({...p}));
 let data = null, mode = "none", lastError = "";
 let view = "today", vo2N = store.get("vo2N", 28) === 84 ? 84 : 28;
 let mSel = null, vSel = null, eSel = null, wSel = null, pSel = null, ttSel = null, iSel = null, TR = null, daySel = null;   // chart selections, last trends model, selected day in the strip
@@ -672,12 +653,6 @@ function evaluate(d){
   return {verdict, provisional, rules, why:counted.map(r=>r.why).filter(Boolean)};
 }
 
-function adviceFor(verdict, plan){
-  if(plan.k==="rest") return verdict==="GO" ? "Rest day as planned." : "Rest day as planned — your rules agree.";
-  if(verdict==="REST") return `Rest today. Skip: ${plan.t.toLowerCase()}.`;
-  if(verdict==="EASY") return plan.k==="quality" ? `Swap the ${plan.t.toLowerCase()} for an easy run (HR below 135) or a swim.` : "Keep it easy as planned.";
-  return plan.k==="quality" ? `Go ahead: ${plan.t.toLowerCase()}.` : "Easy day as planned.";
-}
 
 /* ---------- Today screen ---------- */
 const STATUS_TXT = {ok:"OK", watch:"Watch", easy:"→ Easy", rest:"→ Rest", none:"No data", info:"Info"};
@@ -718,12 +693,12 @@ function renderToday(today){
     hero.className = "card hero";
     drawRing(["Resting HR","Sleep score","Form this morning","Yesterday","Load, last 3 days"].map((l,i)=>({label:l, ring:["RESTING HR","SLEEP","FORM","YESTERDAY","3-DAY LOAD"][i], st:"none", value:"no data"})), "HELLO", "NOT CONNECTED");
     $("vwhy").textContent = "Connect your Intervals.icu account once, and this screen will tell you every morning whether your own rules say GO, EASY or REST.";
-    $("vplanWrap").hidden = true; $("connectBtn").hidden = false;
+    $("connectBtn").hidden = false;
     $("rulesCard").hidden = true; $("daysCard").hidden = true; $("banner").hidden = true; $("ffCard").hidden = true;
     $("foot").textContent = "My Training " + VERSION;
     return;
   }
-  $("vplanWrap").hidden = false; $("connectBtn").hidden = true; $("rulesCard").hidden = false; $("daysCard").hidden = false;
+  $("connectBtn").hidden = true; $("rulesCard").hidden = false; $("daysCard").hidden = false;
   const mf = morningForm(today);
   if(mf){ $("ffCard").hidden = false; $("ffFit").textContent = Math.round(mf.ctl); $("ffFat").textContent = Math.round(mf.atl);
     $("ffForm").textContent = sgnNum(mf.tsb); const fz = formZone(mf.tsb); $("ffForm").style.color = fz.c; $("ffZone").textContent = fz.t; }
@@ -733,9 +708,6 @@ function renderToday(today){
   hero.className = "card hero " + e.verdict;
   drawRing(e.rules.filter(r=>r.id!=="hrr"), e.verdict, e.provisional ? "PROVISIONAL" : "THIS MORNING");
   $("vwhy").textContent = e.why.length ? "Because: " + e.why.join(" · ") + "." : "All your morning rules are clear.";
-  const plan = PLAN[dowMon0(today)] || {t:"—", k:"easy"};
-  $("vplan").textContent = "Planned · " + DAYS_LONG[dowMon0(today)]; $("vplanT").textContent = plan.t;
-  $("vadvice").textContent = adviceFor(e.verdict, plan);
 
   $("rules").innerHTML = e.rules.map(r=>`
     <div class="tile ${r.st}">
@@ -1576,10 +1548,6 @@ function openSheet(){
   $("key").value = store.get("key",""); $("athlete").value = store.get("athlete","");
   RULE_KEYS.forEach(k=>$("r_"+k).value = R[k]);
   $("vo2dec").checked = store.get("vo2dec", true);
-  $("planRows").innerHTML = PLAN.map((p,i)=>`<div class="planrow"><b>${DAYS[i]}</b>
-      <input id="pt${i}" aria-label="${DAYS_LONG[i]} plan" value="${p.t.replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;")}">
-      <select id="pk${i}" aria-label="${DAYS_LONG[i]} session type"><option value="quality">quality</option><option value="easy">easy</option><option value="rest">rest</option></select></div>`).join("");
-  PLAN.forEach((p,i)=>$("pk"+i).value = p.k);
   $("connMsg").textContent = ""; $("ver").textContent = "My Training " + VERSION;
   $("sheet").hidden = false; $("main").hidden = true; $("tabbar").hidden = true; window.scrollTo(0,0);
 }
@@ -1590,17 +1558,16 @@ function saveRulesAndPlan(){
   R.steadyPct = Math.min(50, Math.max(1, R.steadyPct));
   R.effLo = Math.min(100, Math.max(10, R.effLo)); R.effHi = Math.max(R.effLo+5, R.effHi); R.effWarn = Math.max(R.effHi, R.effWarn);
   R.acwrWarn = Math.min(1.9, Math.max(1.05, R.acwrWarn)); R.acwrStop = Math.min(2.5, Math.max(R.acwrWarn+0.05, R.acwrStop));
-  PLAN = PLAN.map((p,i)=>({t:$("pt"+i).value.trim()||p.t, k:$("pk"+i).value}));
   const decWas = store.get("vo2dec", true), decNow = $("vo2dec").checked; store.set("vo2dec", decNow);
   if(decNow && !decWas) setTimeout(loadVo2Fit, 0);
-  store.set("rules", R); store.set("plan", PLAN);
+  store.set("rules", R); store.del("plan");
 }
 $("gear").onclick = openSheet;
 $("connectBtn").onclick = openSheet;
 $("connectBtn2").onclick = openSheet;
 $("closeSheet").onclick = closeSheet;
 $("saveAll").onclick = ()=>{ saveRulesAndPlan(); closeSheet(); };
-$("resetAll").onclick = ()=>{ R = {...DEF_RULES}; PLAN = DEF_PLAN.map(p=>({...p})); store.del("rules"); store.del("plan"); openSheet(); };
+$("resetAll").onclick = ()=>{ R = {...DEF_RULES}; store.del("rules"); openSheet(); };
 $("saveConn").onclick = async ()=>{
   const k = $("key").value.trim(); if(!k){ $("connMsg").textContent = "Paste your API key first."; return; }
   store.set("key", k); store.set("athlete", $("athlete").value.trim()); saveRulesAndPlan();
